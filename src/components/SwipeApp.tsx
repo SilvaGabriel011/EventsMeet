@@ -7,17 +7,19 @@ import {
   EventsResponse,
   PerthEvent,
   TasteProfile,
-  WHEN_OPTIONS,
   WhenFilter,
 } from "@/lib/types";
 import { DEFAULT_THEME, THEMES, ThemeId, isThemeId } from "@/lib/themes";
+import { ChipDef } from "@/lib/chips";
 import SwipeCard, { SwipeDir } from "./SwipeCard";
 import SavedPanel from "./SavedPanel";
+import FilterBar from "./FilterBar";
 
 const SAVED_KEY = "eventsmeet.saved.v1";
 const SEEN_KEY = "eventsmeet.seen.v1";
 const THEME_KEY = "eventsmeet.theme.v1";
 const TASTE_KEY = "eventsmeet.taste.v1";
+const FAV_CHIPS_KEY = "eventsmeet.favchips.v1";
 const VISIBLE_CARDS = 3;
 const TASTE_CAP = 60;
 
@@ -42,6 +44,7 @@ export default function SwipeApp() {
   const [filter, setFilter] = useState<Filter>("All");
   const [when, setWhen] = useState<WhenFilter>("any");
   const [freeOnly, setFreeOnly] = useState(false);
+  const [favChips, setFavChips] = useState<string[]>([]);
   const [saved, setSaved] = useState<PerthEvent[]>([]);
   const [panelOpen, setPanelOpen] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -67,10 +70,20 @@ export default function SwipeApp() {
       if (rawSeen) seenTitles.current = JSON.parse(rawSeen);
       const rawTaste = localStorage.getItem(TASTE_KEY);
       if (rawTaste) taste.current = JSON.parse(rawTaste);
+      const rawFavs = localStorage.getItem(FAV_CHIPS_KEY);
+      if (rawFavs) setFavChips(JSON.parse(rawFavs));
     } catch {
       // Corrupt storage — start fresh.
     }
   }, []);
+
+  const toggleFavChip = (id: string) => {
+    setFavChips((prev) => {
+      const next = prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id];
+      localStorage.setItem(FAV_CHIPS_KEY, JSON.stringify(next));
+      return next;
+    });
+  };
 
   useEffect(() => {
     localStorage.setItem(SAVED_KEY, JSON.stringify(saved));
@@ -202,27 +215,26 @@ export default function SwipeApp() {
     setIndex((i) => Math.max(0, i - 1));
   };
 
-  const changeFilter = (f: Filter) => {
-    if (f === filter && !deckEmpty) return;
-    setFilter(f);
-    refetch(f, when, freeOnly);
-  };
-
-  const changeWhen = (w: WhenFilter) => {
-    if (w === when && !deckEmpty) return;
-    setWhen(w);
-    refetch(filter, w, freeOnly);
-  };
-
-  const toggleFree = () => {
-    const v = !freeOnly;
-    setFreeOnly(v);
-    refetch(filter, when, v);
+  /** Applies a carousel chip: activates it, or reverts to the default if it was active. */
+  const applyChip = (chip: ChipDef, wasActive: boolean) => {
+    if (chip.kind === "cat") {
+      const f = wasActive ? "All" : (chip.value as Filter);
+      setFilter(f);
+      refetch(f, when, freeOnly);
+    } else if (chip.kind === "when") {
+      const w = wasActive ? "any" : (chip.value as WhenFilter);
+      setWhen(w);
+      refetch(filter, w, freeOnly);
+    } else {
+      const v = !freeOnly;
+      setFreeOnly(v);
+      refetch(filter, when, v);
+    }
   };
 
   return (
     <div className={`min-h-dvh ${t.wrapper}`}>
-      <div className="mx-auto flex h-dvh w-full max-w-md flex-col px-4 pb-4 pt-3">
+      <div className="mx-auto flex h-dvh w-full max-w-md flex-col px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-[max(0.75rem,env(safe-area-inset-top))]">
         {/* Header */}
         <header className="flex items-center justify-between py-2">
           <div>
@@ -286,43 +298,16 @@ export default function SwipeApp() {
           </div>
         </header>
 
-        {/* Category chips */}
-        <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pt-2 [scrollbar-width:none]">
-          {(["All", ...CATEGORIES] as Filter[]).map((c) => (
-            <button
-              key={c}
-              onClick={() => changeFilter(c)}
-              className={`whitespace-nowrap rounded-full px-3.5 py-1.5 text-xs font-semibold transition-colors ${
-                filter === c ? t.chipActive : t.chipIdle
-              }`}
-            >
-              {c}
-            </button>
-          ))}
-        </div>
-
-        {/* When / price chips */}
-        <div className="-mx-4 flex gap-2 overflow-x-auto px-4 py-2 [scrollbar-width:none]">
-          {WHEN_OPTIONS.map((w) => (
-            <button
-              key={w.id}
-              onClick={() => changeWhen(w.id)}
-              className={`whitespace-nowrap rounded-full px-3.5 py-1.5 text-xs font-semibold transition-colors ${
-                when === w.id ? t.chipActive : t.chipIdle
-              }`}
-            >
-              {w.label}
-            </button>
-          ))}
-          <button
-            onClick={toggleFree}
-            className={`whitespace-nowrap rounded-full px-3.5 py-1.5 text-xs font-semibold transition-colors ${
-              freeOnly ? t.chipActive : t.chipIdle
-            }`}
-          >
-            🤑 Free only
-          </button>
-        </div>
+        {/* Filters: pinned favorites row + auto-scrolling carousel */}
+        <FilterBar
+          theme={t}
+          filter={filter}
+          when={when}
+          freeOnly={freeOnly}
+          favorites={favChips}
+          onApply={applyChip}
+          onToggleFav={toggleFavChip}
+        />
 
         {/* Notice banner */}
         {note && (
