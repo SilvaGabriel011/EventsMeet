@@ -31,6 +31,24 @@ export interface PerthEvent {
   description: string;
   url: string;
   emoji: string;
+  /** og:image scraped from the event page, or null to fall back to emoji art. */
+  image: string | null;
+}
+
+export type WhenFilter = "any" | "today" | "weekend" | "week";
+
+export const WHEN_OPTIONS: { id: WhenFilter; label: string }[] = [
+  { id: "any", label: "Any time" },
+  { id: "today", label: "Today" },
+  { id: "weekend", label: "Weekend" },
+  { id: "week", label: "Next 7 days" },
+];
+
+/** Compact swipe-history summary sent to the AI to personalize the search. */
+export interface TasteProfile {
+  liked: string[];
+  skipped: string[];
+  topCategories: string[];
 }
 
 export interface EventsResponse {

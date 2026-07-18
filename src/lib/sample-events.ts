@@ -30,6 +30,7 @@ export const SAMPLE_EVENTS: PerthEvent[] = [
     category: "Markets",
     date: "Every Fri–Sun, 9am–6pm",
     start: upcoming(5, 9),
+    image: null,
     venue: "Fremantle Markets, South Terrace",
     price: "Free entry",
     description:
@@ -43,6 +44,7 @@ export const SAMPLE_EVENTS: PerthEvent[] = [
     category: "Music",
     date: "Tonight, 7:30pm",
     start: upcoming(4, 19, 30),
+    image: null,
     venue: "The Ellington Jazz Club, Northbridge",
     price: "From $25",
     description:
@@ -56,6 +58,7 @@ export const SAMPLE_EVENTS: PerthEvent[] = [
     category: "Food & Drink",
     date: "Friday, 4:30pm–9pm",
     start: upcoming(5, 16, 30),
+    image: null,
     venue: "Forrest Place, Perth CBD",
     price: "Free entry",
     description:
@@ -69,6 +72,7 @@ export const SAMPLE_EVENTS: PerthEvent[] = [
     category: "Family",
     date: "Daily, 10am & 2pm",
     start: upcoming(6, 10),
+    image: null,
     venue: "Kings Park & Botanic Garden",
     price: "Free",
     description:
@@ -82,6 +86,7 @@ export const SAMPLE_EVENTS: PerthEvent[] = [
     category: "Comedy",
     date: "Thursday, 8pm",
     start: upcoming(4, 20),
+    image: null,
     venue: "Comedy Lounge, Perth CBD",
     price: "From $20",
     description:
@@ -95,6 +100,7 @@ export const SAMPLE_EVENTS: PerthEvent[] = [
     category: "Arts & Culture",
     date: "Wed–Mon, 10am–5pm",
     start: upcoming(3, 10),
+    image: null,
     venue: "AGWA, Perth Cultural Centre",
     price: "Free",
     description:
@@ -108,6 +114,7 @@ export const SAMPLE_EVENTS: PerthEvent[] = [
     category: "Sports & Fitness",
     date: "Saturday, 5pm",
     start: upcoming(6, 17),
+    image: null,
     venue: "Sir James Mitchell Park, South Perth",
     price: "Free / BYO bike",
     description:
@@ -121,6 +128,7 @@ export const SAMPLE_EVENTS: PerthEvent[] = [
     category: "Nightlife",
     date: "Friday & Saturday, from 8pm",
     start: upcoming(5, 20),
+    image: null,
     venue: "William St & James St, Northbridge",
     price: "Varies",
     description:

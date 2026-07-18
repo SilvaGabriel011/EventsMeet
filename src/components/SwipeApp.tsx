@@ -1,7 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { CATEGORIES, EventsResponse, PerthEvent } from "@/lib/types";
+import {
+  CATEGORIES,
+  EventCategory,
+  EventsResponse,
+  PerthEvent,
+  TasteProfile,
+  WHEN_OPTIONS,
+  WhenFilter,
+} from "@/lib/types";
 import { DEFAULT_THEME, THEMES, ThemeId, isThemeId } from "@/lib/themes";
 import SwipeCard, { SwipeDir } from "./SwipeCard";
 import SavedPanel from "./SavedPanel";
@@ -9,9 +17,21 @@ import SavedPanel from "./SavedPanel";
 const SAVED_KEY = "eventsmeet.saved.v1";
 const SEEN_KEY = "eventsmeet.seen.v1";
 const THEME_KEY = "eventsmeet.theme.v1";
+const TASTE_KEY = "eventsmeet.taste.v1";
 const VISIBLE_CARDS = 3;
+const TASTE_CAP = 60;
 
 type Filter = "All" | (typeof CATEGORIES)[number];
+
+interface TasteEntry {
+  t: string;
+  c: EventCategory;
+}
+
+interface TasteStore {
+  likes: TasteEntry[];
+  skips: TasteEntry[];
+}
 
 export default function SwipeApp() {
   const [deck, setDeck] = useState<PerthEvent[]>([]);
@@ -20,6 +40,8 @@ export default function SwipeApp() {
   const [note, setNote] = useState<string | null>(null);
   const [live, setLive] = useState(false);
   const [filter, setFilter] = useState<Filter>("All");
+  const [when, setWhen] = useState<WhenFilter>("any");
+  const [freeOnly, setFreeOnly] = useState(false);
   const [saved, setSaved] = useState<PerthEvent[]>([]);
   const [panelOpen, setPanelOpen] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -27,6 +49,7 @@ export default function SwipeApp() {
   const [forced, setForced] = useState<{ dir: SwipeDir; nonce: number } | null>(null);
   const [history, setHistory] = useState<{ event: PerthEvent; dir: SwipeDir }[]>([]);
   const seenTitles = useRef<string[]>([]);
+  const taste = useRef<TasteStore>({ likes: [], skips: [] });
 
   const t = THEMES[themeId];
 
@@ -42,6 +65,8 @@ export default function SwipeApp() {
       if (isThemeId(rawTheme)) setThemeId(rawTheme);
       const rawSeen = localStorage.getItem(SEEN_KEY);
       if (rawSeen) seenTitles.current = JSON.parse(rawSeen);
+      const rawTaste = localStorage.getItem(TASTE_KEY);
+      if (rawTaste) taste.current = JSON.parse(rawTaste);
     } catch {
       // Corrupt storage — start fresh.
     }
@@ -62,8 +87,36 @@ export default function SwipeApp() {
     localStorage.setItem(SEEN_KEY, JSON.stringify(seenTitles.current));
   };
 
+  const persistTaste = () => {
+    taste.current.likes = taste.current.likes.slice(-TASTE_CAP);
+    taste.current.skips = taste.current.skips.slice(-TASTE_CAP);
+    localStorage.setItem(TASTE_KEY, JSON.stringify(taste.current));
+  };
+
+  /** Compact summary of the swipe history for the AI prompt. */
+  const tasteProfile = (): TasteProfile | null => {
+    const { likes, skips } = taste.current;
+    if (likes.length + skips.length < 3) return null;
+    const counts = new Map<EventCategory, number>();
+    for (const { c } of likes) counts.set(c, (counts.get(c) ?? 0) + 1);
+    const topCategories = [...counts.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3)
+      .map(([c]) => c);
+    return {
+      liked: likes.slice(-12).map(({ t: title, c }) => `${title} (${c})`),
+      skipped: skips.slice(-12).map(({ t: title, c }) => `${title} (${c})`),
+      topCategories,
+    };
+  };
+
   const fetchEvents = useCallback(
-    async (category: Filter, opts: { append?: boolean; refresh?: boolean } = {}) => {
+    async (
+      category: Filter,
+      whenF: WhenFilter,
+      free: boolean,
+      opts: { append?: boolean; refresh?: boolean; tasteP?: TasteProfile | null } = {}
+    ) => {
       setLoading(true);
       setNote(null);
       try {
@@ -72,6 +125,9 @@ export default function SwipeApp() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             category,
+            when: whenF,
+            freeOnly: free,
+            taste: opts.tasteP ?? null,
             refresh: opts.refresh ?? false,
             exclude: opts.refresh ? seenTitles.current : [],
           }),
@@ -100,20 +156,28 @@ export default function SwipeApp() {
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- initial fetch on mount; setLoading(true) is a no-op on first render
-    fetchEvents("All");
+    fetchEvents("All", "any", false);
   }, [fetchEvents]);
 
   const topEvent = deck[index];
   const deckEmpty = !loading && !topEvent;
 
+  const refetch = (category: Filter, whenF: WhenFilter, free: boolean) =>
+    fetchEvents(category, whenF, free, { tasteP: tasteProfile() });
+
   const handleSwiped = (dir: SwipeDir) => {
     if (!topEvent) return;
     rememberSeen(topEvent.title);
+    const entry: TasteEntry = { t: topEvent.title, c: topEvent.category };
     if (dir === 1) {
+      taste.current.likes.push(entry);
       setSaved((prev) =>
         prev.some((e) => e.title === topEvent.title) ? prev : [topEvent, ...prev]
       );
+    } else {
+      taste.current.skips.push(entry);
     }
+    persistTaste();
     setHistory((prev) => [...prev, { event: topEvent, dir }]);
     setForced(null);
     setIndex((i) => i + 1);
@@ -128,6 +192,10 @@ export default function SwipeApp() {
     const last = history[history.length - 1];
     if (!last) return;
     setHistory((prev) => prev.slice(0, -1));
+    const list = last.dir === 1 ? taste.current.likes : taste.current.skips;
+    const idx = list.map((e) => e.t).lastIndexOf(last.event.title);
+    if (idx !== -1) list.splice(idx, 1);
+    persistTaste();
     if (last.dir === 1) {
       setSaved((prev) => prev.filter((e) => e.title !== last.event.title));
     }
@@ -137,7 +205,19 @@ export default function SwipeApp() {
   const changeFilter = (f: Filter) => {
     if (f === filter && !deckEmpty) return;
     setFilter(f);
-    fetchEvents(f);
+    refetch(f, when, freeOnly);
+  };
+
+  const changeWhen = (w: WhenFilter) => {
+    if (w === when && !deckEmpty) return;
+    setWhen(w);
+    refetch(filter, w, freeOnly);
+  };
+
+  const toggleFree = () => {
+    const v = !freeOnly;
+    setFreeOnly(v);
+    refetch(filter, when, v);
   };
 
   return (
@@ -207,7 +287,7 @@ export default function SwipeApp() {
         </header>
 
         {/* Category chips */}
-        <div className="-mx-4 flex gap-2 overflow-x-auto px-4 py-2 [scrollbar-width:none]">
+        <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pt-2 [scrollbar-width:none]">
           {(["All", ...CATEGORIES] as Filter[]).map((c) => (
             <button
               key={c}
@@ -219,6 +299,29 @@ export default function SwipeApp() {
               {c}
             </button>
           ))}
+        </div>
+
+        {/* When / price chips */}
+        <div className="-mx-4 flex gap-2 overflow-x-auto px-4 py-2 [scrollbar-width:none]">
+          {WHEN_OPTIONS.map((w) => (
+            <button
+              key={w.id}
+              onClick={() => changeWhen(w.id)}
+              className={`whitespace-nowrap rounded-full px-3.5 py-1.5 text-xs font-semibold transition-colors ${
+                when === w.id ? t.chipActive : t.chipIdle
+              }`}
+            >
+              {w.label}
+            </button>
+          ))}
+          <button
+            onClick={toggleFree}
+            className={`whitespace-nowrap rounded-full px-3.5 py-1.5 text-xs font-semibold transition-colors ${
+              freeOnly ? t.chipActive : t.chipIdle
+            }`}
+          >
+            🤑 Free only
+          </button>
         </div>
 
         {/* Notice banner */}
@@ -261,7 +364,13 @@ export default function SwipeApp() {
                 You&apos;ve seen everything for now.
               </p>
               <button
-                onClick={() => fetchEvents(filter, { append: true, refresh: true })}
+                onClick={() =>
+                  fetchEvents(filter, when, freeOnly, {
+                    append: true,
+                    refresh: true,
+                    tasteP: tasteProfile(),
+                  })
+                }
                 className={`rounded-full px-5 py-2.5 text-sm font-bold ${t.primaryBtn}`}
               >
                 Find more events
@@ -299,7 +408,7 @@ export default function SwipeApp() {
           >
             <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor">
               <path d="M12 21s-7.5-4.7-10-9.3C.3 8.6 2.2 5 5.6 5c2 0 3.4 1.1 4.4 2.5A5.3 5.3 0 0 1 14.4 5c3.4 0 5.3 3.6 3.6 6.7C15.5 16.3 12 21 12 21z" />
-            </svg>
+              </svg>
           </button>
         </div>
 

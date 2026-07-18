@@ -11,6 +11,12 @@ export const metadata: Metadata = {
   title: "EventsMeet — Swipe Perth Events",
   description:
     "Tinder-style discovery for events in Perth, WA. Swipe right to save, powered by AI web search.",
+  applicationName: "EventsMeet",
+  appleWebApp: {
+    capable: true,
+    title: "EventsMeet",
+    statusBarStyle: "black-translucent",
+  },
 };
 
 export const viewport: Viewport = {

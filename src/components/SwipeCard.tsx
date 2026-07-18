@@ -1,7 +1,7 @@
 "use client";
 
 import { motion, useAnimation, useMotionValue, useTransform, PanInfo } from "framer-motion";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { PerthEvent } from "@/lib/types";
 import { Theme } from "@/lib/themes";
 
@@ -26,7 +26,9 @@ export default function SwipeCard({ event, theme, depth, forced, onSwiped }: Swi
   const likeOpacity = useTransform(x, [30, 130], [0, 1]);
   const nopeOpacity = useTransform(x, [-130, -30], [1, 0]);
   const controls = useAnimation();
+  const [imgFailed, setImgFailed] = useState(false);
   const isTop = depth === 0;
+  const showImage = Boolean(event.image) && !imgFailed;
 
   const flyOut = (dir: SwipeDir) =>
     controls
@@ -86,16 +88,35 @@ export default function SwipeCard({ event, theme, depth, forced, onSwiped }: Swi
           </>
         )}
 
+        {/* Event photo (og:image) — falls back to the emoji hero on error */}
+        {showImage && (
+          // eslint-disable-next-line @next/next/no-img-element -- arbitrary external domains; next/image needs an allowlist
+          <img
+            src={event.image as string}
+            alt=""
+            draggable={false}
+            referrerPolicy="no-referrer"
+            onError={() => setImgFailed(true)}
+            className="absolute inset-0 h-full w-full object-cover"
+          />
+        )}
+
         {/* Emoji hero */}
-        <div className="relative flex flex-1 items-center justify-center">
+        <div className="relative z-10 flex flex-1 items-center justify-center">
           <span className="absolute left-4 top-4 rounded-full bg-black/30 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-white/90 backdrop-blur">
             {event.category}
           </span>
-          <span className="text-8xl drop-shadow-[0_8px_24px_rgba(0,0,0,0.4)]">{event.emoji}</span>
+          {!showImage && (
+            <span className="text-8xl drop-shadow-[0_8px_24px_rgba(0,0,0,0.4)]">{event.emoji}</span>
+          )}
         </div>
 
         {/* Info */}
-        <div className={`space-y-2 bg-gradient-to-t p-5 pt-10 ${theme.infoOverlay}`}>
+        <div
+          className={`relative z-10 space-y-2 bg-gradient-to-t p-5 pt-10 ${
+            showImage ? "from-black/90 via-black/60 to-transparent" : theme.infoOverlay
+          }`}
+        >
           <h2 className="text-2xl font-bold leading-tight text-white">{event.title}</h2>
           <p className="text-sm font-medium text-white/90">
             📅 {event.date} · 📍 {event.venue}

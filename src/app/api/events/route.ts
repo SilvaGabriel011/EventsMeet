@@ -1,5 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { CATEGORIES, EventsResponse, PerthEvent, EventCategory } from "@/lib/types";
+import {
+  CATEGORIES,
+  EventsResponse,
+  PerthEvent,
+  EventCategory,
+  WhenFilter,
+  TasteProfile,
+} from "@/lib/types";
 import { SAMPLE_EVENTS } from "@/lib/sample-events";
 
 export const maxDuration = 60;
@@ -7,6 +14,7 @@ export const maxDuration = 60;
 const OPENAI_URL = "https://api.openai.com/v1/responses";
 const DEFAULT_MODEL = "gpt-4.1-mini";
 const CACHE_TTL_MS = 30 * 60 * 1000;
+const OG_FETCH_TIMEOUT_MS = 4500;
 
 interface CacheEntry {
   events: PerthEvent[];
@@ -14,10 +22,23 @@ interface CacheEntry {
 }
 
 // Best-effort in-memory cache (per server instance) to avoid re-querying
-// OpenAI for the same category within the TTL.
+// OpenAI for the same search within the TTL.
 const cache = new Map<string, CacheEntry>();
 
-function buildPrompt(category: string | null, exclude: string[]): string {
+const WHEN_PROMPTS: Record<WhenFilter, string> = {
+  any: "happening in the next 30 days",
+  today: "happening TODAY only",
+  weekend: "happening this coming weekend (Friday evening through Sunday)",
+  week: "happening in the next 7 days",
+};
+
+function buildPrompt(
+  category: string | null,
+  when: WhenFilter,
+  freeOnly: boolean,
+  taste: TasteProfile | null,
+  exclude: string[]
+): string {
   const today = new Date().toLocaleDateString("en-AU", {
     weekday: "long",
     year: "numeric",
@@ -31,6 +52,18 @@ function buildPrompt(category: string | null, exclude: string[]): string {
       ? `Focus on the "${category}" category.`
       : `Cover a diverse mix of categories.`;
 
+  const freeLine = freeOnly ? "ONLY include events that are free to attend." : "";
+
+  const tasteLine = taste
+    ? `User taste profile from their swipe history — previously liked: ${taste.liked.join("; ")}.${
+        taste.skipped.length ? ` Skipped (not interested): ${taste.skipped.join("; ")}.` : ""
+      }${
+        taste.topCategories.length
+          ? ` Their favourite categories are ${taste.topCategories.join(", ")}.`
+          : ""
+      } Prioritise events matching their taste while still keeping some variety, and avoid events very similar to the skipped ones.`
+    : "";
+
   const excludeLine = exclude.length
     ? `Do NOT include these events the user has already seen: ${exclude
         .slice(0, 60)
@@ -39,7 +72,7 @@ function buildPrompt(category: string | null, exclude: string[]): string {
 
   return `You are an event scout for Perth, Western Australia. Today is ${today} (Perth time).
 
-Search the web for REAL upcoming events in Perth and surrounding areas (Fremantle, Northbridge, Scarborough, Swan Valley, etc.) happening in the next 30 days. ${categoryLine} ${excludeLine}
+Search the web for REAL upcoming events in Perth and surrounding areas (Fremantle, Northbridge, Scarborough, Swan Valley, etc.) ${WHEN_PROMPTS[when]}. ${categoryLine} ${freeLine} ${tasteLine} ${excludeLine}
 
 Return ONLY a JSON array (no markdown, no commentary) of 8 to 12 events. Each element must have exactly these fields:
 - "title": event name
@@ -101,7 +134,7 @@ function parseEvents(text: string): PerthEvent[] {
       : "Arts & Culture";
 
     const startRaw = str(e.start);
-    const start =
+    const startISO =
       startRaw && !isNaN(Date.parse(startRaw))
         ? new Date(startRaw).toISOString()
         : null;
@@ -111,20 +144,64 @@ function parseEvents(text: string): PerthEvent[] {
       title,
       category,
       date: str(e.date) || "Date TBA",
-      start,
+      start: startISO,
       venue: str(e.venue) || "Perth, WA",
       price: str(e.price) || "See event page",
       description: str(e.description) || "Found by AI web search.",
       url,
       emoji: str(e.emoji) || "🎉",
+      image: null,
     });
   }
   return events;
 }
 
+/** Pulls og:image / twitter:image from an event page. Best-effort — any failure → null. */
+async function fetchOgImage(pageUrl: string): Promise<string | null> {
+  try {
+    const res = await fetch(pageUrl, {
+      signal: AbortSignal.timeout(OG_FETCH_TIMEOUT_MS),
+      redirect: "follow",
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36",
+        Accept: "text/html,application/xhtml+xml",
+      },
+    });
+    if (!res.ok || !(res.headers.get("content-type") ?? "").includes("html")) {
+      return null;
+    }
+    const html = (await res.text()).slice(0, 400_000);
+    const match =
+      html.match(
+        /<meta[^>]+(?:property|name)=["'](?:og:image(?::secure_url)?|twitter:image)["'][^>]*content=["']([^"']+)["']/i
+      ) ??
+      html.match(
+        /<meta[^>]+content=["']([^"']+)["'][^>]*(?:property|name)=["'](?:og:image(?::secure_url)?|twitter:image)["']/i
+      );
+    if (!match) return null;
+
+    let img = match[1].trim().replace(/&amp;/g, "&");
+    if (img.startsWith("//")) img = "https:" + img;
+    else if (img.startsWith("/")) img = new URL(pageUrl).origin + img;
+    return img.startsWith("http") ? img : null;
+  } catch {
+    return null;
+  }
+}
+
+async function enrichWithImages(events: PerthEvent[]): Promise<PerthEvent[]> {
+  return Promise.all(
+    events.map(async (e) => ({ ...e, image: await fetchOgImage(e.url) }))
+  );
+}
+
 async function fetchLiveEvents(
   apiKey: string,
   category: string | null,
+  when: WhenFilter,
+  freeOnly: boolean,
+  taste: TasteProfile | null,
   exclude: string[]
 ): Promise<PerthEvent[]> {
   const res = await fetch(OPENAI_URL, {
@@ -136,9 +213,9 @@ async function fetchLiveEvents(
     body: JSON.stringify({
       model: process.env.OPENAI_MODEL || DEFAULT_MODEL,
       tools: [{ type: "web_search" }],
-      input: buildPrompt(category, exclude),
+      input: buildPrompt(category, when, freeOnly, taste, exclude),
     }),
-    signal: AbortSignal.timeout(55_000),
+    signal: AbortSignal.timeout(45_000),
   });
 
   if (!res.ok) {
@@ -151,19 +228,64 @@ async function fetchLiveEvents(
   if (events.length === 0) {
     throw new Error("OpenAI returned no parseable events");
   }
-  return events;
+  return enrichWithImages(events);
+}
+
+/** Applies the when/free filters to the built-in sample events (Perth time). */
+function filterSamples(when: WhenFilter, freeOnly: boolean, category: string | null): PerthEvent[] {
+  const now = Date.now();
+  const perthDay = (ms: number) => Math.floor((ms + 8 * 3600_000) / 86_400_000);
+  const withinDays = (startISO: string | null, days: number) => {
+    if (!startISO) return false;
+    const start = Date.parse(startISO);
+    return start >= now - 3600_000 && perthDay(start) <= perthDay(now) + days;
+  };
+
+  return SAMPLE_EVENTS.filter((e) => {
+    if (category && category !== "All" && e.category !== category) return false;
+    if (freeOnly && !e.price.toLowerCase().includes("free")) return false;
+    if (when === "today") return withinDays(e.start, 0);
+    if (when === "weekend") {
+      if (!withinDays(e.start, 7) || !e.start) return false;
+      const dow = new Date(Date.parse(e.start) + 8 * 3600_000).getUTCDay();
+      return dow === 5 || dow === 6 || dow === 0;
+    }
+    if (when === "week") return withinDays(e.start, 7);
+    return true;
+  });
+}
+
+function parseTaste(v: unknown): TasteProfile | null {
+  if (typeof v !== "object" || v === null) return null;
+  const o = v as Record<string, unknown>;
+  const strs = (a: unknown, max: number): string[] =>
+    Array.isArray(a)
+      ? a.filter((x): x is string => typeof x === "string").slice(0, max)
+      : [];
+  const taste: TasteProfile = {
+    liked: strs(o.liked, 12),
+    skipped: strs(o.skipped, 12),
+    topCategories: strs(o.topCategories, 3),
+  };
+  return taste.liked.length || taste.skipped.length ? taste : null;
 }
 
 export async function POST(req: NextRequest) {
   let category: string | null = null;
+  let when: WhenFilter = "any";
+  let freeOnly = false;
+  let taste: TasteProfile | null = null;
   let exclude: string[] = [];
   let refresh = false;
 
   try {
     const body = await req.json();
     if (typeof body.category === "string") category = body.category;
+    if (["any", "today", "weekend", "week"].includes(body.when)) when = body.when;
+    freeOnly = body.freeOnly === true;
+    taste = parseTaste(body.taste);
     if (Array.isArray(body.exclude)) {
-      exclude = body.exclude.filter((t: unknown) => typeof t === "string");
+      exclude = body.exclude.filter((x: unknown) => typeof x === "string");
     }
     refresh = body.refresh === true;
   } catch {
@@ -172,18 +294,25 @@ export async function POST(req: NextRequest) {
 
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
-    const events =
-      category && category !== "All"
-        ? SAMPLE_EVENTS.filter((e) => e.category === category)
-        : SAMPLE_EVENTS;
+    const events = filterSamples(when, freeOnly, category);
     return NextResponse.json<EventsResponse>({
-      events: events.length ? events : SAMPLE_EVENTS,
+      events,
       live: false,
-      note: "No OPENAI_API_KEY set — showing sample events. Add your key to .env.local for live AI-searched events.",
+      note:
+        events.length === 0
+          ? "No sample events match these filters. Add your OPENAI_API_KEY to .env.local for live AI-searched events."
+          : "No OPENAI_API_KEY set — showing sample events. Add your key to .env.local for live AI-searched events.",
     });
   }
 
-  const cacheKey = category ?? "All";
+  // Taste titles change on every swipe; keying on top categories keeps the
+  // cache useful while still serving broadly personalized results.
+  const cacheKey = [
+    category ?? "All",
+    when,
+    freeOnly,
+    taste?.topCategories.slice().sort().join(",") ?? "",
+  ].join("|");
   const cached = cache.get(cacheKey);
   const cacheable = !refresh && exclude.length === 0;
   if (cacheable && cached && Date.now() - cached.ts < CACHE_TTL_MS) {
@@ -191,15 +320,16 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const events = await fetchLiveEvents(apiKey, category, exclude);
+    const events = await fetchLiveEvents(apiKey, category, when, freeOnly, taste, exclude);
     if (exclude.length === 0) {
       cache.set(cacheKey, { events, ts: Date.now() });
     }
     return NextResponse.json<EventsResponse>({ events, live: true });
   } catch (err) {
     console.error("Live event search failed:", err);
+    const events = filterSamples(when, freeOnly, category);
     return NextResponse.json<EventsResponse>({
-      events: SAMPLE_EVENTS,
+      events,
       live: false,
       note: `AI search failed (${err instanceof Error ? err.message : "unknown error"}). Showing sample events.`,
     });
