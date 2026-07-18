@@ -11,8 +11,8 @@ body {
 }
 
 body {
-  background: radial-gradient(ellipse at top, #1c1030 0%, #0b0714 55%, #060309 100%)
-    fixed;
+  /* Theme backgrounds are painted by the app wrapper; this is just the base. */
+  background: #0b0714;
   color: #ededed;
   font-family: var(--font-sans), system-ui, sans-serif;
 }

@@ -9,6 +9,8 @@
 - Saved events persist in your browser (localStorage) with a direct link to each event page.
 - Filter by category (Music, Nightlife, Food & Drink…) — each filter triggers a fresh AI search, cached server-side for 30 minutes.
 - "Find more events" asks the AI for new events, excluding ones you've already seen.
+- **Apple Calendar integration** 📅 — add a single saved event or all of them at once as an `.ics` download that opens straight in Apple Calendar (also compatible with Google Calendar and Outlook). Events carry real ISO start times from the AI search; events without a confirmed date are marked "Date TBC" and skipped from export.
+- **4 switchable designs** 🎨 — Neon Night (dark, vivid), Sunset Coast (light, warm), Minimal Mono (black & white editorial) and Aurora Glass (dark glassmorphism). Pick via the palette button in the header; the choice persists in the browser.
 - **No API key?** The app still works, showing a built-in set of sample Perth events with a banner explaining how to go live.
 
 ## Getting started

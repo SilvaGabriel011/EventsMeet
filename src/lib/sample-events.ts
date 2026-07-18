@@ -1,5 +1,26 @@
 import { PerthEvent } from "./types";
 
+/**
+ * Next occurrence of a weekday at a given hour, Perth time (UTC+8, no DST),
+ * so sample events always carry a valid future start for calendar export.
+ * Weekday: 0 = Sunday … 6 = Saturday.
+ */
+function upcoming(weekday: number, hour: number, minute = 0): string {
+  const now = new Date();
+  const perthNow = new Date(now.getTime() + 8 * 3600_000);
+  const daysAhead = ((weekday - perthNow.getUTCDay() + 7) % 7) || 7;
+  const d = new Date(
+    Date.UTC(
+      perthNow.getUTCFullYear(),
+      perthNow.getUTCMonth(),
+      perthNow.getUTCDate() + daysAhead,
+      hour - 8,
+      minute
+    )
+  );
+  return d.toISOString();
+}
+
 // Shown when no OPENAI_API_KEY is configured (or the API call fails), so the
 // app is fully usable out of the box. Details are representative, not live.
 export const SAMPLE_EVENTS: PerthEvent[] = [
@@ -8,6 +29,7 @@ export const SAMPLE_EVENTS: PerthEvent[] = [
     title: "Fremantle Markets Weekend",
     category: "Markets",
     date: "Every Fri–Sun, 9am–6pm",
+    start: upcoming(5, 9),
     venue: "Fremantle Markets, South Terrace",
     price: "Free entry",
     description:
@@ -20,6 +42,7 @@ export const SAMPLE_EVENTS: PerthEvent[] = [
     title: "Live Jazz at The Ellington",
     category: "Music",
     date: "Tonight, 7:30pm",
+    start: upcoming(4, 19, 30),
     venue: "The Ellington Jazz Club, Northbridge",
     price: "From $25",
     description:
@@ -32,6 +55,7 @@ export const SAMPLE_EVENTS: PerthEvent[] = [
     title: "Twilight Hawkers Market",
     category: "Food & Drink",
     date: "Friday, 4:30pm–9pm",
+    start: upcoming(5, 16, 30),
     venue: "Forrest Place, Perth CBD",
     price: "Free entry",
     description:
@@ -44,6 +68,7 @@ export const SAMPLE_EVENTS: PerthEvent[] = [
     title: "Kings Park Guided Bushland Walk",
     category: "Family",
     date: "Daily, 10am & 2pm",
+    start: upcoming(6, 10),
     venue: "Kings Park & Botanic Garden",
     price: "Free",
     description:
@@ -56,6 +81,7 @@ export const SAMPLE_EVENTS: PerthEvent[] = [
     title: "Comedy Lounge Thursday Showcase",
     category: "Comedy",
     date: "Thursday, 8pm",
+    start: upcoming(4, 20),
     venue: "Comedy Lounge, Perth CBD",
     price: "From $20",
     description:
@@ -68,6 +94,7 @@ export const SAMPLE_EVENTS: PerthEvent[] = [
     title: "Art Gallery of WA — Free Exhibitions",
     category: "Arts & Culture",
     date: "Wed–Mon, 10am–5pm",
+    start: upcoming(3, 10),
     venue: "AGWA, Perth Cultural Centre",
     price: "Free",
     description:
@@ -80,6 +107,7 @@ export const SAMPLE_EVENTS: PerthEvent[] = [
     title: "Sunset Cycle: South Perth Foreshore",
     category: "Sports & Fitness",
     date: "Saturday, 5pm",
+    start: upcoming(6, 17),
     venue: "Sir James Mitchell Park, South Perth",
     price: "Free / BYO bike",
     description:
@@ -92,6 +120,7 @@ export const SAMPLE_EVENTS: PerthEvent[] = [
     title: "Northbridge Night Out",
     category: "Nightlife",
     date: "Friday & Saturday, from 8pm",
+    start: upcoming(5, 20),
     venue: "William St & James St, Northbridge",
     price: "Varies",
     description:

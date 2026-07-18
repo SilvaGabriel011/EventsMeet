@@ -41,10 +41,11 @@ function buildPrompt(category: string | null, exclude: string[]): string {
 
 Search the web for REAL upcoming events in Perth and surrounding areas (Fremantle, Northbridge, Scarborough, Swan Valley, etc.) happening in the next 30 days. ${categoryLine} ${excludeLine}
 
-Return ONLY a JSON array (no markdown, no commentary) of 8 to 12 events. Each element must have exactly these string fields:
+Return ONLY a JSON array (no markdown, no commentary) of 8 to 12 events. Each element must have exactly these fields:
 - "title": event name
 - "category": one of ${CATEGORIES.map((c) => `"${c}"`).join(", ")}
 - "date": human-friendly date/time, e.g. "Sat 26 Jul, 7pm"
+- "start": exact start date-time in ISO 8601 with the Perth timezone offset, e.g. "2026-07-26T19:00:00+08:00" — or null if the exact date/time cannot be determined
 - "venue": venue name and suburb
 - "price": e.g. "Free", "From $30"
 - "description": 1–2 punchy sentences selling the event
@@ -99,11 +100,18 @@ function parseEvents(text: string): PerthEvent[] {
       ? (str(e.category) as EventCategory)
       : "Arts & Culture";
 
+    const startRaw = str(e.start);
+    const start =
+      startRaw && !isNaN(Date.parse(startRaw))
+        ? new Date(startRaw).toISOString()
+        : null;
+
     events.push({
       id: `live-${Date.now()}-${i}`,
       title,
       category,
       date: str(e.date) || "Date TBA",
+      start,
       venue: str(e.venue) || "Perth, WA",
       price: str(e.price) || "See event page",
       description: str(e.description) || "Found by AI web search.",

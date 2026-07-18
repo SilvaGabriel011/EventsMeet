@@ -2,12 +2,14 @@
 
 import { motion, useAnimation, useMotionValue, useTransform, PanInfo } from "framer-motion";
 import { useEffect } from "react";
-import { CATEGORY_GRADIENTS, PerthEvent } from "@/lib/types";
+import { PerthEvent } from "@/lib/types";
+import { Theme } from "@/lib/themes";
 
 export type SwipeDir = 1 | -1;
 
 interface SwipeCardProps {
   event: PerthEvent;
+  theme: Theme;
   /** 0 = top of the stack (draggable), 1–2 = cards peeking behind it. */
   depth: number;
   /** Set by the action buttons to fly the top card out programmatically. */
@@ -18,7 +20,7 @@ interface SwipeCardProps {
 const SWIPE_THRESHOLD = 110;
 const FLY_X = 900;
 
-export default function SwipeCard({ event, depth, forced, onSwiped }: SwipeCardProps) {
+export default function SwipeCard({ event, theme, depth, forced, onSwiped }: SwipeCardProps) {
   const x = useMotionValue(0);
   const rotate = useTransform(x, [-250, 250], [-14, 14]);
   const likeOpacity = useTransform(x, [30, 130], [0, 1]);
@@ -62,7 +64,7 @@ export default function SwipeCard({ event, depth, forced, onSwiped }: SwipeCardP
       onDragEnd={isTop ? handleDragEnd : undefined}
     >
       <motion.div
-        className={`flex h-full w-full flex-col overflow-hidden rounded-3xl bg-gradient-to-br shadow-2xl shadow-black/50 ring-1 ring-white/10 ${CATEGORY_GRADIENTS[event.category]}`}
+        className={`flex h-full w-full flex-col overflow-hidden bg-gradient-to-br shadow-2xl shadow-black/40 ${theme.cardBase} ${theme.cardRadius} ${theme.cardRing} ${theme.gradients[event.category]}`}
         animate={{ scale: 1 - depth * 0.05, y: depth * 14 }}
         transition={{ type: "spring", stiffness: 300, damping: 30 }}
       >
@@ -93,14 +95,14 @@ export default function SwipeCard({ event, depth, forced, onSwiped }: SwipeCardP
         </div>
 
         {/* Info */}
-        <div className="space-y-2 bg-gradient-to-t from-black/80 via-black/60 to-transparent p-5 pt-10">
+        <div className={`space-y-2 bg-gradient-to-t p-5 pt-10 ${theme.infoOverlay}`}>
           <h2 className="text-2xl font-bold leading-tight text-white">{event.title}</h2>
           <p className="text-sm font-medium text-white/90">
             📅 {event.date} · 📍 {event.venue}
           </p>
           <p className="text-sm leading-snug text-white/75">{event.description}</p>
           <div className="flex items-center justify-between pt-1">
-            <span className="rounded-full bg-white/15 px-3 py-1 text-sm font-semibold text-white">
+            <span className={`rounded-full px-3 py-1 text-sm font-semibold ${theme.priceChip}`}>
               {event.price}
             </span>
             <a
@@ -108,7 +110,7 @@ export default function SwipeCard({ event, depth, forced, onSwiped }: SwipeCardP
               target="_blank"
               rel="noopener noreferrer"
               draggable={false}
-              className="text-sm font-semibold text-white/90 underline decoration-white/40 underline-offset-4 hover:text-white"
+              className={`text-sm font-semibold underline underline-offset-4 ${theme.viewLink}`}
             >
               View event ↗
             </a>
