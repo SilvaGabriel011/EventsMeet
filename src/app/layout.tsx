@@ -24,6 +24,9 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
+  // Lets the app paint behind the iPhone notch/home indicator; the layout
+  // compensates with env(safe-area-inset-*) padding.
+  viewportFit: "cover",
 };
 
 export default function RootLayout({
