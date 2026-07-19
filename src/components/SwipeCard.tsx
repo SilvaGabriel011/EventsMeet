@@ -15,12 +15,14 @@ interface SwipeCardProps {
   /** Set by the action buttons to fly the top card out programmatically. */
   forced: { dir: SwipeDir; nonce: number } | null;
   onSwiped: (dir: SwipeDir) => void;
+  /** Tap (not drag) on the top card opens the details sheet. */
+  onOpenDetails?: () => void;
 }
 
 const SWIPE_THRESHOLD = 110;
 const FLY_X = 900;
 
-export default function SwipeCard({ event, theme, depth, forced, onSwiped }: SwipeCardProps) {
+export default function SwipeCard({ event, theme, depth, forced, onSwiped, onOpenDetails }: SwipeCardProps) {
   const x = useMotionValue(0);
   const rotate = useTransform(x, [-250, 250], [-14, 14]);
   const likeOpacity = useTransform(x, [30, 130], [0, 1]);
@@ -64,6 +66,14 @@ export default function SwipeCard({ event, theme, depth, forced, onSwiped }: Swi
       dragElastic={0.9}
       dragMomentum={false}
       onDragEnd={isTop ? handleDragEnd : undefined}
+      onTap={
+        isTop && onOpenDetails
+          ? (e) => {
+              // Links inside the card keep their own behavior.
+              if (!(e.target as HTMLElement | null)?.closest?.("a")) onOpenDetails();
+            }
+          : undefined
+      }
     >
       <motion.div
         className={`flex h-full w-full flex-col overflow-hidden bg-gradient-to-br shadow-2xl shadow-black/40 ${theme.cardBase} ${theme.cardRadius} ${theme.cardRing} ${theme.gradients[event.category]}`}
