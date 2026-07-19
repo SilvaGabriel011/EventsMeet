@@ -14,6 +14,7 @@
 - **Real event photos** 📸 — the server scrapes each event page's `og:image` and shows it full-bleed on the card, Tinder-style, falling back to the emoji artwork when a page has no usable image.
 - **Date & price filters** 🗓️ — Any time / Today / Weekend / Next 7 days **or a custom date range** (pick from/to), plus price caps (Free only / Under $25 / $50 / $100). Filters are pushed into the AI search itself (and applied to the sample events).
 - **Taste personalization** ❤️ — your likes and skips build a local taste profile (favourite categories + recent examples) that is fed into the AI prompt, so the deck gets more *you* the more you swipe. Stays in your browser.
+- **Calendar preview** 👁 — the eye button in the header opens a month-by-month calendar marking the days that have events (deck + saved); tap a day to list its events, with month navigation and an undated section.
 - **Installable PWA** 📱 — web app manifest, icons and iOS meta tags: open in Safari on iPhone → Share → "Add to Home Screen" and it runs full-screen like a native app.
 - **No API key?** The app still works, showing a built-in set of sample Perth events with a banner explaining how to go live.
 

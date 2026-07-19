@@ -17,6 +17,7 @@ import SwipeCard, { SwipeDir } from "./SwipeCard";
 import SavedPanel from "./SavedPanel";
 import FilterSheet, { CategoryFilter, FilterState } from "./FilterSheet";
 import DetailsSheet from "./DetailsSheet";
+import CalendarSheet from "./CalendarSheet";
 import GestureHint from "./GestureHint";
 import AccountSheet from "./AccountSheet";
 
@@ -81,6 +82,7 @@ export default function SwipeApp() {
   const [saved, setSaved] = useState<PerthEvent[]>([]);
   const [panelOpen, setPanelOpen] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
+  const [calendarOpen, setCalendarOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const [detailsEvent, setDetailsEvent] = useState<PerthEvent | null>(null);
   const [hintVisible, setHintVisible] = useState(false);
@@ -104,7 +106,8 @@ export default function SwipeApp() {
     filters.dateTo ?? "",
     filters.price,
   ].join("|");
-  const anySheetOpen = panelOpen || accountOpen || filterOpen || Boolean(detailsEvent);
+  const anySheetOpen =
+    panelOpen || accountOpen || filterOpen || calendarOpen || Boolean(detailsEvent);
 
   // Sheets participate in browser history so the iOS back gesture (and the
   // Android back button) closes the open panel instead of leaving the app.
@@ -115,6 +118,7 @@ export default function SwipeApp() {
       setPanelOpen(false);
       setAccountOpen(false);
       setFilterOpen(false);
+      setCalendarOpen(false);
       setDetailsEvent(null);
     };
     window.addEventListener("popstate", onPop);
@@ -441,6 +445,17 @@ export default function SwipeApp() {
             </p>
           </div>
           <div className="flex items-center gap-2">
+            {/* Calendar preview */}
+            <button
+              onClick={() => setCalendarOpen(true)}
+              className={`rounded-full p-2.5 ${t.headerBtn}`}
+              aria-label="Preview events calendar"
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" />
+                <circle cx="12" cy="12" r="3" />
+              </svg>
+            </button>
             {/* Theme picker */}
             <div className="relative">
               <button
@@ -639,6 +654,12 @@ export default function SwipeApp() {
           </button>
         </div>
 
+        <CalendarSheet
+          open={calendarOpen}
+          events={[...deck, ...saved]}
+          theme={t}
+          onClose={() => setCalendarOpen(false)}
+        />
         <FilterSheet
           open={filterOpen}
           theme={t}
