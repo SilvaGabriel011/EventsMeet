@@ -379,7 +379,7 @@ export default function SwipeApp() {
 
   return (
     <div className={`min-h-dvh ${t.wrapper}`}>
-      <div className="mx-auto flex h-dvh w-full max-w-md flex-col px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-[max(0.75rem,env(safe-area-inset-top))]">
+      <div className="mx-auto flex h-dvh w-full max-w-md flex-col pb-[max(1rem,env(safe-area-inset-bottom))] pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] pt-[max(0.75rem,env(safe-area-inset-top))]">
         {/* Header */}
         <header className="flex items-center justify-between py-2">
           <div>
@@ -503,57 +503,59 @@ export default function SwipeApp() {
           </div>
         )}
 
-        {/* Card stack */}
-        <div className="relative flex-1">
-          {loading && (
-            <div className={`absolute inset-0 flex animate-pulse flex-col items-center justify-center gap-3 ${t.cardRadius} ${t.surface}`}>
-              <span className="text-5xl">🔎</span>
-              <p className={`px-8 text-center text-sm font-medium ${t.surfaceText}`}>
-                AI is scouting Perth for events…
-              </p>
-            </div>
-          )}
+        {/* Card stack — height-capped so cards keep a sane aspect on tall screens */}
+        <div className="flex min-h-0 flex-1 flex-col justify-center">
+          <div className="relative max-h-[40rem] w-full flex-1">
+            {loading && (
+              <div className={`absolute inset-0 flex animate-pulse flex-col items-center justify-center gap-3 ${t.cardRadius} ${t.surface}`}>
+                <span className="text-5xl">🔎</span>
+                <p className={`px-8 text-center text-sm font-medium ${t.surfaceText}`}>
+                  AI is scouting Perth for events…
+                </p>
+              </div>
+            )}
 
-          {!loading &&
-            deck
-              .slice(index, index + VISIBLE_CARDS)
-              .map((event, i) => (
-                <SwipeCard
-                  key={event.id}
-                  event={event}
-                  theme={t}
-                  depth={i}
-                  forced={i === 0 ? forced : null}
-                  onSwiped={handleSwiped}
-                  onOpenDetails={i === 0 ? () => setDetailsEvent(event) : undefined}
-                />
-              ))
-              .reverse()}
+            {!loading &&
+              deck
+                .slice(index, index + VISIBLE_CARDS)
+                .map((event, i) => (
+                  <SwipeCard
+                    key={event.id}
+                    event={event}
+                    theme={t}
+                    depth={i}
+                    forced={i === 0 ? forced : null}
+                    onSwiped={handleSwiped}
+                    onOpenDetails={i === 0 ? () => setDetailsEvent(event) : undefined}
+                  />
+                ))
+                .reverse()}
 
-          {deckEmpty && (
-            <div className={`absolute inset-0 flex flex-col items-center justify-center gap-4 ${t.cardRadius} ${t.surface}`}>
-              <span className="text-5xl">🎉</span>
-              <p className={`px-8 text-center text-sm font-medium ${t.surfaceText}`}>
-                You&apos;ve seen everything for now.
-              </p>
-              <button
-                onClick={() => {
-                  if (!consumePrefetch()) {
-                    fetchEvents(filters, { append: true, refresh: true });
-                  }
-                }}
-                className={`rounded-full px-5 py-2.5 text-sm font-bold ${t.primaryBtn}`}
-              >
-                Find more events
-              </button>
-            </div>
-          )}
+            {deckEmpty && (
+              <div className={`absolute inset-0 flex flex-col items-center justify-center gap-4 ${t.cardRadius} ${t.surface}`}>
+                <span className="text-5xl">🎉</span>
+                <p className={`px-8 text-center text-sm font-medium ${t.surfaceText}`}>
+                  You&apos;ve seen everything for now.
+                </p>
+                <button
+                  onClick={() => {
+                    if (!consumePrefetch()) {
+                      fetchEvents(filters, { append: true, refresh: true });
+                    }
+                  }}
+                  className={`rounded-full px-5 py-2.5 text-sm font-bold ${t.primaryBtn}`}
+                >
+                  Find more events
+                </button>
+              </div>
+            )}
 
-          <GestureHint
-            show={hintVisible && !loading && Boolean(topEvent)}
-            theme={t}
-            onDismiss={dismissHint}
-          />
+            <GestureHint
+              show={hintVisible && !loading && Boolean(topEvent)}
+              theme={t}
+              onDismiss={dismissHint}
+            />
+          </div>
         </div>
 
         {/* Action buttons */}
