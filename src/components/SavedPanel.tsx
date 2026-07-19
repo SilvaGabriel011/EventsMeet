@@ -205,12 +205,20 @@ export default function SavedPanel({ open, saved, theme: t, user, onClose, onRem
                   Swipe right on events you like! 💜
                 </p>
               )}
-              {saved.map((event) => {
+              {saved.map((event, i) => {
                 const evKey = eventKey(event.title);
                 const people = coGoers.get(evKey) ?? [];
                 return (
-                  <div
+                  <motion.div
                     key={event.id}
+                    initial={{ opacity: 0, y: 24 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{
+                      delay: Math.min(i * 0.05, 0.4),
+                      type: "spring",
+                      stiffness: 400,
+                      damping: 30,
+                    }}
                     className={`rounded-2xl p-4 ${t.panelCard}`}
                   >
                     <div className="flex items-start gap-3">
@@ -283,7 +291,7 @@ export default function SavedPanel({ open, saved, theme: t, user, onClose, onRem
                         ))}
                       </div>
                     )}
-                  </div>
+                  </motion.div>
                 );
               })}
             </div>

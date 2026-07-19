@@ -4,23 +4,13 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useState } from "react";
 import {
   CATEGORIES,
+  FilterState,
   PRICE_OPTIONS,
-  PriceFilter,
   WHEN_OPTIONS,
-  WhenFilter,
 } from "@/lib/types";
 import { Theme } from "@/lib/themes";
 
-export type CategoryFilter = "All" | (typeof CATEGORIES)[number];
-
-export interface FilterState {
-  filter: CategoryFilter;
-  when: WhenFilter;
-  /** YYYY-MM-DD bounds, only meaningful when `when` is "custom". */
-  dateFrom: string | null;
-  dateTo: string | null;
-  price: PriceFilter;
-}
+export type { CategoryFilter, FilterState } from "@/lib/types";
 
 interface FilterSheetProps {
   open: boolean;

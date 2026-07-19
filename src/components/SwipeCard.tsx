@@ -1,6 +1,13 @@
 "use client";
 
-import { motion, useAnimation, useMotionValue, useTransform, PanInfo } from "framer-motion";
+import {
+  motion,
+  useAnimation,
+  useMotionValue,
+  useReducedMotion,
+  useTransform,
+  PanInfo,
+} from "framer-motion";
 import { useEffect, useState } from "react";
 import { PerthEvent } from "@/lib/types";
 import { Theme } from "@/lib/themes";
@@ -18,20 +25,43 @@ interface SwipeCardProps {
   onSwiped: (dir: SwipeDir) => void;
   /** Tap (not drag) on the top card opens the details sheet. */
   onOpenDetails?: () => void;
+  /** After an undo, the restored card slides back in from the side it left. */
+  enterFrom?: SwipeDir | null;
 }
 
 const SWIPE_THRESHOLD = 110;
 const FLY_X = 900;
 
-export default function SwipeCard({ event, theme, depth, forced, onSwiped, onOpenDetails }: SwipeCardProps) {
+export default function SwipeCard({
+  event,
+  theme,
+  depth,
+  forced,
+  onSwiped,
+  onOpenDetails,
+  enterFrom,
+}: SwipeCardProps) {
   const x = useMotionValue(0);
   const rotate = useTransform(x, [-250, 250], [-14, 14]);
   const likeOpacity = useTransform(x, [30, 130], [0, 1]);
   const nopeOpacity = useTransform(x, [-130, -30], [1, 0]);
   const controls = useAnimation();
+  const reduceMotion = useReducedMotion();
   const [imgFailed, setImgFailed] = useState(false);
   const isTop = depth === 0;
   const showImage = Boolean(event.image) && !imgFailed;
+
+  // Undo: slide the restored card back in from the side it flew out.
+  useEffect(() => {
+    if (isTop && enterFrom) {
+      x.set(enterFrom * 600);
+      controls.start({
+        x: 0,
+        transition: { type: "spring", stiffness: 300, damping: 28 },
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const flyOut = (dir: SwipeDir) =>
     controls
@@ -78,7 +108,8 @@ export default function SwipeCard({ event, theme, depth, forced, onSwiped, onOpe
     >
       <motion.div
         className={`flex h-full w-full flex-col overflow-hidden bg-gradient-to-br shadow-2xl shadow-black/40 ${theme.cardBase} ${theme.cardRadius} ${theme.cardRing} ${theme.gradients[event.category]}`}
-        animate={{ scale: 1 - depth * 0.05, y: depth * 14 }}
+        initial={{ opacity: 0, scale: 0.9 - depth * 0.05, y: depth * 14 + 28 }}
+        animate={{ opacity: 1, scale: 1 - depth * 0.05, y: depth * 14 }}
         transition={{ type: "spring", stiffness: 300, damping: 30 }}
       >
         {/* Stamps */}
@@ -118,7 +149,15 @@ export default function SwipeCard({ event, theme, depth, forced, onSwiped, onOpe
             {event.category}
           </span>
           {!showImage && (
-            <span className="text-8xl drop-shadow-[0_8px_24px_rgba(0,0,0,0.4)]">{event.emoji}</span>
+            <motion.span
+              className="text-8xl drop-shadow-[0_8px_24px_rgba(0,0,0,0.4)]"
+              animate={
+                isTop && !reduceMotion ? { y: [0, -10, 0], rotate: [0, -3, 3, 0] } : undefined
+              }
+              transition={{ repeat: Infinity, duration: 3.6, ease: "easeInOut" }}
+            >
+              {event.emoji}
+            </motion.span>
           )}
         </div>
 

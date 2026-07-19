@@ -1,9 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import {
+  CategoryFilter,
   EventCategory,
   EventsResponse,
+  FilterState,
   PerthEvent,
   TasteProfile,
   WHEN_OPTIONS,
@@ -15,7 +18,7 @@ import { addSave, removeSaveByTitle, syncSaves } from "@/lib/social";
 import { User } from "@supabase/supabase-js";
 import SwipeCard, { SwipeDir } from "./SwipeCard";
 import SavedPanel from "./SavedPanel";
-import FilterSheet, { CategoryFilter, FilterState } from "./FilterSheet";
+import FilterSheet from "./FilterSheet";
 import DetailsSheet from "./DetailsSheet";
 import CalendarSheet from "./CalendarSheet";
 import GestureHint from "./GestureHint";
@@ -90,6 +93,7 @@ export default function SwipeApp() {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [themeId, setThemeId] = useState<ThemeId>(DEFAULT_THEME);
   const [forced, setForced] = useState<{ dir: SwipeDir; nonce: number } | null>(null);
+  const [enterFrom, setEnterFrom] = useState<SwipeDir | null>(null);
   const [history, setHistory] = useState<{ event: PerthEvent; dir: SwipeDir }[]>([]);
   const seen = useRef<SeenEntry[]>([]);
   const taste = useRef<TasteStore>({ likes: [], skips: [] });
@@ -355,6 +359,7 @@ export default function SwipeApp() {
     persistTaste();
     setHistory((prev) => [...prev, { event: topEvent, dir }]);
     setForced(null);
+    setEnterFrom(null);
     if (index + 1 >= deck.length) consumePrefetch();
     setIndex((i) => i + 1);
   };
@@ -378,6 +383,7 @@ export default function SwipeApp() {
         removeSaveByTitle(sb, user.id, last.event.title).catch(() => {});
       }
     }
+    setEnterFrom(last.dir);
     setIndex((i) => Math.max(0, i - 1));
   };
 
@@ -516,9 +522,15 @@ export default function SwipeApp() {
                 <path d="M12 21s-7.5-4.7-10-9.3C.3 8.6 2.2 5 5.6 5c2 0 3.4 1.1 4.4 2.5A5.3 5.3 0 0 1 14.4 5c3.4 0 5.3 3.6 3.6 6.7C15.5 16.3 12 21 12 21z" />
               </svg>
               {saved.length > 0 && (
-                <span className={`absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[11px] font-bold ${t.badge}`}>
+                <motion.span
+                  key={saved.length}
+                  initial={{ scale: 0.3 }}
+                  animate={{ scale: 1 }}
+                  transition={{ type: "spring", stiffness: 500, damping: 15 }}
+                  className={`absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[11px] font-bold ${t.badge}`}
+                >
                   {saved.length}
-                </span>
+                </motion.span>
               )}
             </button>
           </div>
@@ -537,23 +549,30 @@ export default function SwipeApp() {
             </svg>
             Filters
           </button>
-          {activeChips.map((chip) => (
-            <span
-              key={chip.label}
-              className={`flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full py-1.5 pl-3.5 pr-2 text-xs font-semibold ${t.chipActive}`}
-            >
-              {chip.label}
-              <button
-                onClick={() => clearChip(chip.kind)}
-                aria-label={`Remove ${chip.label} filter`}
-                className="rounded-full p-0.5 opacity-80 hover:opacity-100"
+          <AnimatePresence initial={false}>
+            {activeChips.map((chip) => (
+              <motion.span
+                key={chip.kind}
+                layout
+                initial={{ opacity: 0, scale: 0.6 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.6 }}
+                transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                className={`flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full py-1.5 pl-3.5 pr-2 text-xs font-semibold ${t.chipActive}`}
               >
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round">
-                  <path d="M18 6 6 18M6 6l12 12" />
-                </svg>
-              </button>
-            </span>
-          ))}
+                {chip.label}
+                <button
+                  onClick={() => clearChip(chip.kind)}
+                  aria-label={`Remove ${chip.label} filter`}
+                  className="rounded-full p-0.5 opacity-80 hover:opacity-100"
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round">
+                    <path d="M18 6 6 18M6 6l12 12" />
+                  </svg>
+                </button>
+              </motion.span>
+            ))}
+          </AnimatePresence>
           {activeChips.length === 0 && (
             <span className={`shrink-0 text-xs font-medium ${t.tagline}`}>
               All events · Any time
@@ -571,10 +590,25 @@ export default function SwipeApp() {
         {/* Card stack */}
         <div className="relative flex-1">
           {loading && (
-            <div className={`absolute inset-0 flex animate-pulse flex-col items-center justify-center gap-3 ${t.cardRadius} ${t.surface}`}>
-              <span className="text-5xl">🔎</span>
+            <div className={`absolute inset-0 flex flex-col items-center justify-center gap-3 ${t.cardRadius} ${t.surface}`}>
+              <motion.span
+                className="text-5xl"
+                animate={{ rotate: [0, -18, 18, 0], y: [0, -8, 0] }}
+                transition={{ repeat: Infinity, duration: 1.8, ease: "easeInOut" }}
+              >
+                🔎
+              </motion.span>
               <p className={`px-8 text-center text-sm font-medium ${t.surfaceText}`}>
-                AI is scouting Perth for events…
+                AI is scouting Perth for events
+                {[0, 1, 2].map((i) => (
+                  <motion.span
+                    key={i}
+                    animate={{ opacity: [0.2, 1, 0.2] }}
+                    transition={{ repeat: Infinity, duration: 1.2, delay: i * 0.25 }}
+                  >
+                    .
+                  </motion.span>
+                ))}
               </p>
             </div>
           )}
@@ -591,13 +625,21 @@ export default function SwipeApp() {
                   forced={i === 0 ? forced : null}
                   onSwiped={handleSwiped}
                   onOpenDetails={i === 0 ? () => setDetailsEvent(event) : undefined}
+                  enterFrom={i === 0 ? enterFrom : null}
                 />
               ))
               .reverse()}
 
           {deckEmpty && (
             <div className={`absolute inset-0 flex flex-col items-center justify-center gap-4 ${t.cardRadius} ${t.surface}`}>
-              <span className="text-5xl">🎉</span>
+              <motion.span
+                className="text-5xl"
+                initial={{ scale: 0, rotate: -40 }}
+                animate={{ scale: 1, rotate: 0 }}
+                transition={{ type: "spring", stiffness: 300, damping: 12 }}
+              >
+                🎉
+              </motion.span>
               <p className={`px-8 text-center text-sm font-medium ${t.surfaceText}`}>
                 You&apos;ve seen everything for now.
               </p>
@@ -623,40 +665,48 @@ export default function SwipeApp() {
 
         {/* Action buttons */}
         <div className="flex items-center justify-center gap-5 py-4">
-          <button
+          <motion.button
             onClick={rewind}
             disabled={history.length === 0}
             aria-label="Undo last swipe"
-            className={`rounded-full p-3.5 transition disabled:opacity-30 ${t.undoBtn}`}
+            whileTap={{ scale: 0.8, rotate: -25 }}
+            whileHover={{ scale: 1.08 }}
+            className={`rounded-full p-3.5 disabled:opacity-30 ${t.undoBtn}`}
           >
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M3 7v6h6" />
               <path d="M21 17a9 9 0 0 0-15-6.7L3 13" />
             </svg>
-          </button>
-          <button
+          </motion.button>
+          <motion.button
             onClick={() => swipe(-1)}
             aria-label="Skip event"
-            className={`rounded-full p-5 shadow-lg transition hover:scale-105 ${t.nopeBtn}`}
+            whileTap={{ scale: 0.8 }}
+            whileHover={{ scale: 1.1 }}
+            className={`rounded-full p-5 shadow-lg ${t.nopeBtn}`}
           >
             <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round">
               <path d="M18 6 6 18M6 6l12 12" />
             </svg>
-          </button>
-          <button
+          </motion.button>
+          <motion.button
             onClick={() => swipe(1)}
             aria-label="Save event"
-            className={`rounded-full p-5 shadow-lg transition hover:scale-105 ${t.likeBtn}`}
+            whileTap={{ scale: 0.8 }}
+            whileHover={{ scale: 1.1 }}
+            className={`rounded-full p-5 shadow-lg ${t.likeBtn}`}
           >
             <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor">
               <path d="M12 21s-7.5-4.7-10-9.3C.3 8.6 2.2 5 5.6 5c2 0 3.4 1.1 4.4 2.5A5.3 5.3 0 0 1 14.4 5c3.4 0 5.3 3.6 3.6 6.7C15.5 16.3 12 21 12 21z" />
             </svg>
-          </button>
+          </motion.button>
         </div>
 
         <CalendarSheet
           open={calendarOpen}
           events={[...deck, ...saved]}
+          filters={filters}
+          filterSummary={activeChips.map((c) => c.label).join(" · ") || null}
           theme={t}
           onClose={() => setCalendarOpen(false)}
         />

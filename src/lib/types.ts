@@ -56,6 +56,29 @@ export const PRICE_OPTIONS: { id: PriceFilter; label: string }[] = [
   { id: 100, label: "Under $100" },
 ];
 
+export type CategoryFilter = "All" | EventCategory;
+
+export interface FilterState {
+  filter: CategoryFilter;
+  when: WhenFilter;
+  /** YYYY-MM-DD bounds, only meaningful when `when` is "custom". */
+  dateFrom: string | null;
+  dateTo: string | null;
+  price: PriceFilter;
+}
+
+/** Solid accent per category — used for calendar pills and legends across all themes. */
+export const CATEGORY_COLORS: Record<EventCategory, string> = {
+  Music: "bg-fuchsia-500",
+  Nightlife: "bg-violet-500",
+  "Food & Drink": "bg-orange-500",
+  "Arts & Culture": "bg-cyan-500",
+  Comedy: "bg-amber-400",
+  "Sports & Fitness": "bg-emerald-500",
+  Markets: "bg-lime-500",
+  Family: "bg-sky-500",
+};
+
 /** Compact swipe-history summary sent to the AI to personalize the search. */
 export interface TasteProfile {
   liked: string[];
