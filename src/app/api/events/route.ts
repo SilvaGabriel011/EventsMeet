@@ -12,7 +12,7 @@ import { SAMPLE_EVENTS } from "@/lib/sample-events";
 export const maxDuration = 60;
 
 const OPENAI_URL = "https://api.openai.com/v1/responses";
-const DEFAULT_MODEL = "gpt-4.1-mini";
+const DEFAULT_MODEL = "gpt-5.6-luna";
 const CACHE_TTL_MS = 30 * 60 * 1000;
 const OG_FETCH_TIMEOUT_MS = 4500;
 

@@ -22,27 +22,3 @@ body {
   display: none;
 }
 
-/* Filter carousel: the track is rendered twice, so -50% loops seamlessly. */
-@keyframes marquee {
-  from {
-    transform: translateX(0);
-  }
-  to {
-    transform: translateX(-50%);
-  }
-}
-
-.marquee-track {
-  animation: marquee 40s linear infinite;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .marquee-track {
-    animation: none;
-  }
-  /* Without the animation the options must be reachable by manual scroll. */
-  .marquee-viewport {
-    overflow-x: auto;
-    scrollbar-width: none;
-  }
-}

@@ -32,7 +32,7 @@ Open [http://localhost:3000](http://localhost:3000).
 | Variable | Required | Description |
 | --- | --- | --- |
 | `OPENAI_API_KEY` | For live events | Your OpenAI API key. The key is only used server-side — it is never exposed to the browser. |
-| `OPENAI_MODEL` | No | Model for event search (default `gpt-4.1-mini`). Must support the Responses API `web_search` tool. |
+| `OPENAI_MODEL` | No | Model for event search (default `gpt-5.6-luna`). Must support the Responses API `web_search` tool. |
 | `NEXT_PUBLIC_SUPABASE_URL` | For accounts/social | Supabase project URL (Project Settings → API). |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | For accounts/social | Supabase anon/public key. Safe for the browser — access is enforced by Row Level Security. |
 | `SUPABASE_SERVICE_ROLE_KEY` | For the webcal feed | Supabase service-role key. **Server-side only**; mark as Sensitive in Vercel. |
