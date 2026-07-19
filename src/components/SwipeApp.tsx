@@ -11,9 +11,13 @@ import {
 } from "@/lib/types";
 import { DEFAULT_THEME, THEMES, ThemeId, isThemeId } from "@/lib/themes";
 import { ChipDef } from "@/lib/chips";
+import { getSupabase } from "@/lib/supabase";
+import { addSave, removeSaveByTitle, syncSaves } from "@/lib/social";
+import { User } from "@supabase/supabase-js";
 import SwipeCard, { SwipeDir } from "./SwipeCard";
 import SavedPanel from "./SavedPanel";
 import FilterBar from "./FilterBar";
+import AccountSheet from "./AccountSheet";
 
 const SAVED_KEY = "eventsmeet.saved.v1";
 const SEEN_KEY = "eventsmeet.seen.v1";
@@ -47,14 +51,36 @@ export default function SwipeApp() {
   const [favChips, setFavChips] = useState<string[]>([]);
   const [saved, setSaved] = useState<PerthEvent[]>([]);
   const [panelOpen, setPanelOpen] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
+  const [user, setUser] = useState<User | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [themeId, setThemeId] = useState<ThemeId>(DEFAULT_THEME);
   const [forced, setForced] = useState<{ dir: SwipeDir; nonce: number } | null>(null);
   const [history, setHistory] = useState<{ event: PerthEvent; dir: SwipeDir }[]>([]);
   const seenTitles = useRef<string[]>([]);
   const taste = useRef<TasteStore>({ likes: [], skips: [] });
+  const savedRef = useRef<PerthEvent[]>([]);
+  const sb = getSupabase();
 
   const t = THEMES[themeId];
+
+  // Track auth state (no-op when Supabase isn't configured).
+  useEffect(() => {
+    if (!sb) return;
+    sb.auth.getSession().then(({ data }) => setUser(data.session?.user ?? null));
+    const { data: sub } = sb.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+    });
+    return () => sub.subscription.unsubscribe();
+  }, [sb]);
+
+  // On sign-in: push local saves to the server, then adopt the merged list.
+  useEffect(() => {
+    if (!sb || !user) return;
+    syncSaves(sb, user.id, savedRef.current)
+      .then(setSaved)
+      .catch((err) => console.error("Saved-events sync failed:", err));
+  }, [sb, user]);
 
   // Hydrate persisted state after mount — localStorage isn't available during
   // SSR, and reading it in a useState initializer would cause a hydration
@@ -86,6 +112,7 @@ export default function SwipeApp() {
   };
 
   useEffect(() => {
+    savedRef.current = saved;
     localStorage.setItem(SAVED_KEY, JSON.stringify(saved));
   }, [saved]);
 
@@ -187,6 +214,11 @@ export default function SwipeApp() {
       setSaved((prev) =>
         prev.some((e) => e.title === topEvent.title) ? prev : [topEvent, ...prev]
       );
+      if (sb && user) {
+        addSave(sb, user.id, topEvent).catch((err) =>
+          console.error("Server save failed:", err)
+        );
+      }
     } else {
       taste.current.skips.push(entry);
     }
@@ -211,6 +243,9 @@ export default function SwipeApp() {
     persistTaste();
     if (last.dir === 1) {
       setSaved((prev) => prev.filter((e) => e.title !== last.event.title));
+      if (sb && user) {
+        removeSaveByTitle(sb, user.id, last.event.title).catch(() => {});
+      }
     }
     setIndex((i) => Math.max(0, i - 1));
   };
@@ -280,6 +315,22 @@ export default function SwipeApp() {
                 </>
               )}
             </div>
+            {/* Account (hidden when Supabase isn't configured) */}
+            {sb && (
+              <button
+                onClick={() => setAccountOpen(true)}
+                className={`relative rounded-full p-2.5 ${t.headerBtn}`}
+                aria-label="Open account"
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="8" r="4" />
+                  <path d="M4 21c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5" />
+                </svg>
+                {user && (
+                  <span className={`absolute -right-0.5 -top-0.5 h-3 w-3 rounded-full border-2 border-transparent ${t.badge}`} />
+                )}
+              </button>
+            )}
             {/* Saved events */}
             <button
               onClick={() => setPanelOpen(true)}
@@ -401,8 +452,21 @@ export default function SwipeApp() {
           open={panelOpen}
           saved={saved}
           theme={t}
+          user={user}
           onClose={() => setPanelOpen(false)}
-          onRemove={(id) => setSaved((prev) => prev.filter((e) => e.id !== id))}
+          onRemove={(id) => {
+            const event = saved.find((e) => e.id === id);
+            setSaved((prev) => prev.filter((e) => e.id !== id));
+            if (event && sb && user) {
+              removeSaveByTitle(sb, user.id, event.title).catch(() => {});
+            }
+          }}
+        />
+        <AccountSheet
+          open={accountOpen}
+          user={user}
+          theme={t}
+          onClose={() => setAccountOpen(false)}
         />
       </div>
     </div>
