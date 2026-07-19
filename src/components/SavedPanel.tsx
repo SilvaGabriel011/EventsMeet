@@ -1,14 +1,29 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
+import { useEffect, useState } from "react";
+import { User } from "@supabase/supabase-js";
 import { PerthEvent } from "@/lib/types";
 import { Theme } from "@/lib/themes";
 import { calendarReady, downloadICS } from "@/lib/ics";
+import { getSupabase } from "@/lib/supabase";
+import {
+  CoGoer,
+  WaveSets,
+  eventKey,
+  fetchCoGoers,
+  fetchContact,
+  fetchMyWaves,
+  getCalendarToken,
+  sendWave,
+  wavePair,
+} from "@/lib/social";
 
 interface SavedPanelProps {
   open: boolean;
   saved: PerthEvent[];
   theme: Theme;
+  user: User | null;
   onClose: () => void;
   onRemove: (id: string) => void;
 }
@@ -22,8 +37,87 @@ function CalendarIcon() {
   );
 }
 
-export default function SavedPanel({ open, saved, theme: t, onClose, onRemove }: SavedPanelProps) {
+interface PersonRowProps {
+  person: CoGoer;
+  evKey: string;
+  waves: WaveSets;
+  theme: Theme;
+  onWave: (evKey: string, toUser: string) => void;
+  contact: string | null | undefined;
+  onNeedContact: (userId: string) => void;
+}
+
+function PersonRow({ person, evKey, waves, theme: t, onWave, contact, onNeedContact }: PersonRowProps) {
+  const pair = wavePair(evKey, person.userId);
+  const sent = waves.sent.has(pair);
+  const received = waves.received.has(pair);
+  const matched = sent && received;
+
+  useEffect(() => {
+    if (matched && contact === undefined) onNeedContact(person.userId);
+  }, [matched, contact, onNeedContact, person.userId]);
+
+  return (
+    <div className="flex items-center justify-between gap-2 py-1">
+      <span className={`truncate text-xs font-medium ${t.panelTitle}`}>
+        {person.name}
+        {received && !matched && <span className={`ml-1.5 ${t.panelMuted}`}>waved at you 👋</span>}
+      </span>
+      {matched ? (
+        <span className={`shrink-0 text-xs font-semibold ${t.panelLink}`}>
+          🎉 Match{contact ? ` · ${contact}` : ""}
+        </span>
+      ) : sent ? (
+        <span className={`shrink-0 text-xs ${t.panelMuted}`}>Waved ✓</span>
+      ) : (
+        <button
+          onClick={() => onWave(evKey, person.userId)}
+          className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-bold ${t.primaryBtn}`}
+        >
+          👋 Wave
+        </button>
+      )}
+    </div>
+  );
+}
+
+export default function SavedPanel({ open, saved, theme: t, user, onClose, onRemove }: SavedPanelProps) {
+  const sb = getSupabase();
   const exportable = calendarReady(saved);
+  const [coGoers, setCoGoers] = useState<Map<string, CoGoer[]>>(new Map());
+  const [waves, setWaves] = useState<WaveSets>({ sent: new Set(), received: new Set() });
+  const [contacts, setContacts] = useState<Record<string, string | null>>({});
+  const [webcalUrl, setWebcalUrl] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState<string | null>(null);
+
+  // Load social + feed data whenever the panel opens signed-in.
+  useEffect(() => {
+    if (!open || !sb || !user) return;
+    const keys = saved.map((e) => eventKey(e.title));
+    fetchCoGoers(sb, user.id, keys).then(setCoGoers).catch(() => {});
+    fetchMyWaves(sb, user.id).then(setWaves).catch(() => {});
+    getCalendarToken(sb, user.id)
+      .then((token) =>
+        setWebcalUrl(`webcal://${window.location.host}/api/calendar/feed?token=${token}`)
+      )
+      .catch(() => setWebcalUrl(null));
+  }, [open, sb, user, saved]);
+
+  const handleWave = (evKey: string, toUser: string) => {
+    if (!sb || !user) return;
+    sendWave(sb, user.id, evKey, toUser).catch(() => {});
+    setWaves((prev) => ({
+      sent: new Set(prev.sent).add(wavePair(evKey, toUser)),
+      received: prev.received,
+    }));
+  };
+
+  const loadContact = (userId: string) => {
+    if (!sb || contacts[userId] !== undefined) return;
+    fetchContact(sb, userId).then((c) =>
+      setContacts((prev) => ({ ...prev, [userId]: c }))
+    );
+  };
 
   return (
     <AnimatePresence>
@@ -59,23 +153,39 @@ export default function SavedPanel({ open, saved, theme: t, onClose, onRemove }:
             </div>
 
             {saved.length > 0 && (
-              <div className={`border-b p-5 ${t.panelBorder}`}>
+              <div className={`space-y-2 border-b p-5 ${t.panelBorder}`}>
+                {user && webcalUrl && (
+                  <>
+                    <a
+                      href={webcalUrl}
+                      className={`block w-full rounded-full px-5 py-3 text-center text-sm font-bold transition ${t.primaryBtn}`}
+                    >
+                      🔁 Auto-sync with Apple Calendar
+                    </a>
+                    <p className={`text-center text-[11px] ${t.panelMuted}`}>
+                      Subscribes Apple Calendar to your personal feed — saves and
+                      removals sync automatically.
+                    </p>
+                  </>
+                )}
                 <button
                   onClick={() => downloadICS(exportable, "eventsmeet-perth.ics")}
                   disabled={exportable.length === 0}
-                  className={`w-full rounded-full px-5 py-3 text-sm font-bold transition disabled:opacity-40 ${t.primaryBtn}`}
+                  className={`w-full rounded-full px-5 py-3 text-sm font-bold transition disabled:opacity-40 ${
+                    user && webcalUrl ? `${t.panelCard} ${t.panelTitle}` : t.primaryBtn
+                  }`}
                 >
                   <CalendarIcon />{" "}
                   {exportable.length > 0
-                    ? ` Add ${exportable.length === 1 ? "event" : `all ${exportable.length}`} to Apple Calendar`
+                    ? ` One-off download (.ics)`
                     : " No events with confirmed dates yet"}
                 </button>
-                <p className={`mt-2 text-center text-[11px] ${t.panelMuted}`}>
-                  Downloads an .ics file that opens straight in Apple Calendar
-                  (also works with Google/Outlook).
-                  {exportable.length < saved.length &&
-                    ` ${saved.length - exportable.length} event${saved.length - exportable.length === 1 ? "" : "s"} without a confirmed date will be skipped.`}
-                </p>
+                {sb && !user && (
+                  <p className={`text-center text-[11px] ${t.panelMuted}`}>
+                    Sign in (👤 in the header) for automatic calendar sync and to see
+                    who else is going.
+                  </p>
+                )}
               </div>
             )}
 
@@ -87,53 +197,83 @@ export default function SavedPanel({ open, saved, theme: t, onClose, onRemove }:
                   Swipe right on events you like! 💜
                 </p>
               )}
-              {saved.map((event) => (
-                <div
-                  key={event.id}
-                  className={`flex items-start gap-3 rounded-2xl p-4 ${t.panelCard}`}
-                >
-                  <span className="text-3xl">{event.emoji}</span>
-                  <div className="min-w-0 flex-1">
-                    <h3 className={`truncate font-semibold ${t.panelTitle}`}>{event.title}</h3>
-                    <p className={`mt-0.5 text-xs ${t.panelMuted}`}>
-                      {event.date} · {event.venue}
-                    </p>
-                    <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
-                      <a
-                        href={event.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className={`text-xs font-semibold ${t.panelLink}`}
-                      >
-                        View event ↗
-                      </a>
-                      {event.start ? (
-                        <button
-                          onClick={() =>
-                            downloadICS(
-                              [event],
-                              `${event.title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.ics`
-                            )
-                          }
-                          className={`text-xs font-semibold ${t.panelLink}`}
-                        >
-                          <CalendarIcon /> Add to Calendar
-                        </button>
-                      ) : (
-                        <span className={`text-xs ${t.panelMuted}`} title="No confirmed date/time for this event">
-                          <CalendarIcon /> Date TBC
-                        </span>
-                      )}
-                      <button
-                        onClick={() => onRemove(event.id)}
-                        className={`text-xs font-medium ${t.panelMuted} hover:text-rose-400`}
-                      >
-                        Remove
-                      </button>
+              {saved.map((event) => {
+                const evKey = eventKey(event.title);
+                const people = coGoers.get(evKey) ?? [];
+                return (
+                  <div
+                    key={event.id}
+                    className={`rounded-2xl p-4 ${t.panelCard}`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <span className="text-3xl">{event.emoji}</span>
+                      <div className="min-w-0 flex-1">
+                        <h3 className={`truncate font-semibold ${t.panelTitle}`}>{event.title}</h3>
+                        <p className={`mt-0.5 text-xs ${t.panelMuted}`}>
+                          {event.date} · {event.venue}
+                        </p>
+                        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+                          <a
+                            href={event.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className={`text-xs font-semibold ${t.panelLink}`}
+                          >
+                            View ↗
+                          </a>
+                          {event.start ? (
+                            <button
+                              onClick={() =>
+                                downloadICS(
+                                  [event],
+                                  `${event.title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.ics`
+                                )
+                              }
+                              className={`text-xs font-semibold ${t.panelLink}`}
+                            >
+                              <CalendarIcon /> Calendar
+                            </button>
+                          ) : (
+                            <span className={`text-xs ${t.panelMuted}`} title="No confirmed date/time for this event">
+                              <CalendarIcon /> Date TBC
+                            </span>
+                          )}
+                          {user && people.length > 0 && (
+                            <button
+                              onClick={() => setExpanded(expanded === evKey ? null : evKey)}
+                              className={`text-xs font-semibold ${t.panelLink}`}
+                            >
+                              👥 {people.length} also going
+                            </button>
+                          )}
+                          <button
+                            onClick={() => onRemove(event.id)}
+                            className={`text-xs font-medium ${t.panelMuted} hover:text-rose-400`}
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      </div>
                     </div>
+                    {user && expanded === evKey && people.length > 0 && (
+                      <div className={`mt-3 border-t pt-2 ${t.panelBorder}`}>
+                        {people.map((p) => (
+                          <PersonRow
+                            key={p.userId}
+                            person={p}
+                            evKey={evKey}
+                            waves={waves}
+                            theme={t}
+                            onWave={handleWave}
+                            contact={contacts[p.userId]}
+                            onNeedContact={loadContact}
+                          />
+                        ))}
+                      </div>
+                    )}
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </motion.aside>
         </>

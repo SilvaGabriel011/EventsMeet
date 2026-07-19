@@ -33,6 +33,24 @@ Open [http://localhost:3000](http://localhost:3000).
 | --- | --- | --- |
 | `OPENAI_API_KEY` | For live events | Your OpenAI API key. The key is only used server-side — it is never exposed to the browser. |
 | `OPENAI_MODEL` | No | Model for event search (default `gpt-4.1-mini`). Must support the Responses API `web_search` tool. |
+| `NEXT_PUBLIC_SUPABASE_URL` | For accounts/social | Supabase project URL (Project Settings → API). |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | For accounts/social | Supabase anon/public key. Safe for the browser — access is enforced by Row Level Security. |
+| `SUPABASE_SERVICE_ROLE_KEY` | For the webcal feed | Supabase service-role key. **Server-side only**; mark as Sensitive in Vercel. |
+
+## Supabase setup (accounts, auto calendar sync, social)
+
+Without Supabase the app runs fully in localStorage-only mode. To enable accounts, cross-device sync, the auto-updating Apple Calendar feed and "who else is going":
+
+1. Create a project at [supabase.com](https://supabase.com) (free tier is fine).
+2. **SQL Editor → New query** → paste the contents of [`supabase/schema.sql`](supabase/schema.sql) → **Run**. This creates the tables and Row Level Security policies (safe to re-run).
+3. **Authentication → Email Templates → Magic Link**: make sure the template includes the `{{ .Token }}` variable (the 6-digit code the app asks for), e.g. `Your EventsMeet code: {{ .Token }}`.
+4. **Project Settings → API**: copy the URL, anon key and service-role key into `.env.local` / Vercel env vars (see table above), then redeploy.
+
+What signing in unlocks:
+
+- **Cross-device saves** — liked events live in Postgres; your local list is merged into the account on first sign-in.
+- **🔁 Auto-sync with Apple Calendar** — the saved panel offers a `webcal://` subscription to your personal tokenized feed (`/api/calendar/feed?token=…`); Apple Calendar refreshes it automatically, so saves/removals just show up. The one-off `.ics` download still works for everyone.
+- **👥 Also going + matches** — each saved event shows other signed-in users who saved it. Wave 👋 at someone; if they wave back it's a match 🎉 and only then is your contact handle (set in the account sheet) revealed to each other — enforced by RLS, not just UI.
 
 ## Stack
 
