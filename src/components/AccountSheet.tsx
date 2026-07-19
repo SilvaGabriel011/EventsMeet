@@ -104,19 +104,25 @@ export default function AccountSheet({ open, user, theme: t, onClose }: AccountS
             onClick={onClose}
           />
           <motion.aside
-            className={`fixed right-0 top-0 z-50 flex h-full w-full max-w-md flex-col shadow-2xl ${t.panelBg}`}
+            className={`fixed right-0 top-0 z-50 flex h-dvh w-full max-w-md flex-col pt-[env(safe-area-inset-top)] shadow-2xl ${t.panelBg}`}
             initial={{ x: "100%" }}
             animate={{ x: 0 }}
             exit={{ x: "100%" }}
             transition={{ type: "spring", stiffness: 350, damping: 35 }}
+            drag="x"
+            dragConstraints={{ left: 0, right: 0 }}
+            dragElastic={{ left: 0, right: 0.6 }}
+            onDragEnd={(_, info) => {
+              if (info.offset.x > 120 || info.velocity.x > 500) onClose();
+            }}
           >
             <div className={`flex items-center justify-between border-b p-4 ${t.panelBorder}`}>
               <button
                 onClick={onClose}
                 aria-label="Back to events"
-                className={`-ml-1 flex items-center gap-0.5 rounded-full py-2 pl-1 pr-3 text-sm font-semibold ${t.panelClose}`}
+                className={`-ml-1 flex items-center gap-1 rounded-full py-2.5 pl-1.5 pr-4 text-base font-semibold ${t.panelClose}`}
               >
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <path d="m15 18-6-6 6-6" />
                 </svg>
                 Back
@@ -126,7 +132,7 @@ export default function AccountSheet({ open, user, theme: t, onClose }: AccountS
               </h2>
             </div>
 
-            <div className="flex-1 space-y-4 overflow-y-auto p-5">
+            <div className="flex-1 space-y-4 overflow-y-auto p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
               {!user && step === "email" && (
                 <>
                   <p className={`text-sm ${t.panelMuted}`}>
