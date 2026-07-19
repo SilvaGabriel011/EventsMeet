@@ -5,6 +5,7 @@ import { useState } from "react";
 import { PerthEvent } from "@/lib/types";
 import { Theme } from "@/lib/themes";
 import { downloadICS } from "@/lib/ics";
+import { openExternal } from "@/lib/openExternal";
 
 interface DetailsSheetProps {
   event: PerthEvent | null;
@@ -90,6 +91,10 @@ function Body({ event, theme: t, onClose, onDecide }: DetailsSheetProps & { even
               href={event.url}
               target="_blank"
               rel="noopener noreferrer"
+              onClick={(e) => {
+                e.preventDefault();
+                openExternal(event.url);
+              }}
               className={`text-sm font-semibold ${t.panelLink}`}
             >
               Open event page ↗

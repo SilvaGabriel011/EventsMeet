@@ -7,6 +7,7 @@ import { PerthEvent } from "@/lib/types";
 import { Theme } from "@/lib/themes";
 import { calendarReady, downloadICS } from "@/lib/ics";
 import { getSupabase } from "@/lib/supabase";
+import { openExternal } from "@/lib/openExternal";
 import {
   CoGoer,
   WaveSets,
@@ -137,19 +138,20 @@ export default function SavedPanel({ open, saved, theme: t, user, onClose, onRem
             exit={{ x: "100%" }}
             transition={{ type: "spring", stiffness: 350, damping: 35 }}
           >
-            <div className={`flex items-center justify-between border-b p-5 ${t.panelBorder}`}>
+            <div className={`flex items-center justify-between border-b p-4 ${t.panelBorder}`}>
+              <button
+                onClick={onClose}
+                aria-label="Back to events"
+                className={`-ml-1 flex items-center gap-0.5 rounded-full py-2 pl-1 pr-3 text-sm font-semibold ${t.panelClose}`}
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="m15 18-6-6 6-6" />
+                </svg>
+                Back
+              </button>
               <h2 className={`text-lg font-bold ${t.panelTitle}`}>
                 My events <span className={t.panelMuted}>({saved.length})</span>
               </h2>
-              <button
-                onClick={onClose}
-                aria-label="Close saved events"
-                className={`rounded-full p-2 ${t.panelClose}`}
-              >
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                  <path d="M18 6 6 18M6 6l12 12" />
-                </svg>
-              </button>
             </div>
 
             {saved.length > 0 && (
@@ -217,6 +219,10 @@ export default function SavedPanel({ open, saved, theme: t, user, onClose, onRem
                             href={event.url}
                             target="_blank"
                             rel="noopener noreferrer"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              openExternal(event.url);
+                            }}
                             className={`text-xs font-semibold ${t.panelLink}`}
                           >
                             View ↗

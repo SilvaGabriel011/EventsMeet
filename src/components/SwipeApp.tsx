@@ -96,6 +96,26 @@ export default function SwipeApp() {
 
   const t = THEMES[themeId];
   const filtersKey = `${filters.filter}|${filters.when}|${filters.freeOnly}`;
+  const anySheetOpen = panelOpen || accountOpen || filterOpen || Boolean(detailsEvent);
+
+  // Sheets participate in browser history so the iOS back gesture (and the
+  // Android back button) closes the open panel instead of leaving the app.
+  useEffect(() => {
+    if (!anySheetOpen) return;
+    window.history.pushState({ emSheet: true }, "");
+    const onPop = () => {
+      setPanelOpen(false);
+      setAccountOpen(false);
+      setFilterOpen(false);
+      setDetailsEvent(null);
+    };
+    window.addEventListener("popstate", onPop);
+    return () => {
+      window.removeEventListener("popstate", onPop);
+      // Closed by tap (not by back): consume the history entry we pushed.
+      if (window.history.state?.emSheet) window.history.back();
+    };
+  }, [anySheetOpen]);
 
   // Track auth state (no-op when Supabase isn't configured).
   useEffect(() => {

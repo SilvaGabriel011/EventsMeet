@@ -4,6 +4,7 @@ import { motion, useAnimation, useMotionValue, useTransform, PanInfo } from "fra
 import { useEffect, useState } from "react";
 import { PerthEvent } from "@/lib/types";
 import { Theme } from "@/lib/themes";
+import { openExternal } from "@/lib/openExternal";
 
 export type SwipeDir = 1 | -1;
 
@@ -141,6 +142,10 @@ export default function SwipeCard({ event, theme, depth, forced, onSwiped, onOpe
               target="_blank"
               rel="noopener noreferrer"
               draggable={false}
+              onClick={(e) => {
+                e.preventDefault();
+                openExternal(event.url);
+              }}
               className={`text-sm font-semibold underline underline-offset-4 ${theme.viewLink}`}
             >
               View event ↗
