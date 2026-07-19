@@ -131,7 +131,7 @@ export default function SavedPanel({ open, saved, theme: t, user, onClose, onRem
             onClick={onClose}
           />
           <motion.aside
-            className={`fixed right-0 top-0 z-50 flex h-full w-full max-w-md flex-col shadow-2xl ${t.panelBg}`}
+            className={`fixed right-0 top-0 z-50 flex h-dvh w-full max-w-md flex-col shadow-2xl pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] pt-[env(safe-area-inset-top)] ${t.panelBg}`}
             initial={{ x: "100%" }}
             animate={{ x: 0 }}
             exit={{ x: "100%" }}
@@ -144,7 +144,7 @@ export default function SavedPanel({ open, saved, theme: t, user, onClose, onRem
               <button
                 onClick={onClose}
                 aria-label="Close saved events"
-                className={`rounded-full p-2 ${t.panelClose}`}
+                className={`-my-1 rounded-full p-3 ${t.panelClose}`}
               >
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
                   <path d="M18 6 6 18M6 6l12 12" />
