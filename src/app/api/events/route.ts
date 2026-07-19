@@ -213,6 +213,9 @@ async function fetchLiveEvents(
     body: JSON.stringify({
       model: process.env.OPENAI_MODEL || DEFAULT_MODEL,
       tools: [{ type: "web_search" }],
+      // Low effort keeps the search well under the function time limit;
+      // higher efforts routinely blow past 60s with web search enabled.
+      reasoning: { effort: "low" },
       input: buildPrompt(category, when, freeOnly, taste, exclude),
     }),
     signal: AbortSignal.timeout(45_000),

@@ -223,6 +223,9 @@ export default function SwipeApp() {
           refresh,
           exclude,
         }),
+        // Without a deadline a dead server connection (or an iOS PWA resumed
+        // from suspension) leaves the loading screen stuck forever.
+        signal: AbortSignal.timeout(65_000),
       });
       return res.json();
     },
@@ -512,6 +515,9 @@ export default function SwipeApp() {
                 <p className={`px-8 text-center text-sm font-medium ${t.surfaceText}`}>
                   AI is scouting Perth for events…
                 </p>
+                <p className={`px-8 text-center text-xs opacity-60 ${t.surfaceText}`}>
+                  Live web search — this can take up to 30 seconds
+                </p>
               </div>
             )}
 
@@ -533,9 +539,11 @@ export default function SwipeApp() {
 
             {deckEmpty && (
               <div className={`absolute inset-0 flex flex-col items-center justify-center gap-4 ${t.cardRadius} ${t.surface}`}>
-                <span className="text-5xl">🎉</span>
+                <span className="text-5xl">{note ? "😕" : "🎉"}</span>
                 <p className={`px-8 text-center text-sm font-medium ${t.surfaceText}`}>
-                  You&apos;ve seen everything for now.
+                  {note
+                    ? "The event search didn't come back. Give it another go."
+                    : "You've seen everything for now."}
                 </p>
                 <button
                   onClick={() => {
