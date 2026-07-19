@@ -73,7 +73,9 @@ export default function SwipeApp() {
   const [filters, setFilters] = useState<FilterState>({
     filter: "All",
     when: "any",
-    freeOnly: false,
+    dateFrom: null,
+    dateTo: null,
+    price: "any",
   });
   const [favChips, setFavChips] = useState<string[]>([]);
   const [saved, setSaved] = useState<PerthEvent[]>([]);
@@ -95,7 +97,13 @@ export default function SwipeApp() {
   const sb = getSupabase();
 
   const t = THEMES[themeId];
-  const filtersKey = `${filters.filter}|${filters.when}|${filters.freeOnly}`;
+  const filtersKey = [
+    filters.filter,
+    filters.when,
+    filters.dateFrom ?? "",
+    filters.dateTo ?? "",
+    filters.price,
+  ].join("|");
   const anySheetOpen = panelOpen || accountOpen || filterOpen || Boolean(detailsEvent);
 
   // Sheets participate in browser history so the iOS back gesture (and the
@@ -238,7 +246,9 @@ export default function SwipeApp() {
         body: JSON.stringify({
           category: f.filter,
           when: f.when,
-          freeOnly: f.freeOnly,
+          dateFrom: f.dateFrom,
+          dateTo: f.dateTo,
+          price: f.price,
           taste: tasteProfile(),
           refresh,
           exclude,
@@ -283,7 +293,7 @@ export default function SwipeApp() {
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- initial fetch on mount; setLoading(true) is a no-op on first render
-    fetchEvents({ filter: "All", when: "any", freeOnly: false });
+    fetchEvents({ filter: "All", when: "any", dateFrom: null, dateTo: null, price: "any" });
   }, [fetchEvents]);
 
   const topEvent = deck[index] as PerthEvent | undefined;
@@ -371,30 +381,50 @@ export default function SwipeApp() {
     const changed =
       next.filter !== filters.filter ||
       next.when !== filters.when ||
-      next.freeOnly !== filters.freeOnly;
+      next.dateFrom !== filters.dateFrom ||
+      next.dateTo !== filters.dateTo ||
+      next.price !== filters.price;
     setFilters(next);
     if (changed || deckEmpty) fetchEvents(next);
   };
 
-  type ChipKind = "cat" | "when" | "free";
+  const fmtDay = (isoDay: string) =>
+    new Date(`${isoDay}T00:00:00`).toLocaleDateString("en-AU", {
+      day: "numeric",
+      month: "short",
+    });
+
+  type ChipKind = "cat" | "when" | "price";
   const activeChips: { kind: ChipKind; label: string }[] = [];
   if (filters.filter !== "All") {
     activeChips.push({ kind: "cat", label: filters.filter });
   }
-  if (filters.when !== "any") {
+  if (filters.when === "custom" && filters.dateFrom && filters.dateTo) {
+    activeChips.push({
+      kind: "when",
+      label:
+        filters.dateFrom === filters.dateTo
+          ? fmtDay(filters.dateFrom)
+          : `${fmtDay(filters.dateFrom)} – ${fmtDay(filters.dateTo)}`,
+    });
+  } else if (filters.when !== "any" && filters.when !== "custom") {
     activeChips.push({
       kind: "when",
       label: WHEN_OPTIONS.find((w) => w.id === filters.when)?.label ?? filters.when,
     });
   }
-  if (filters.freeOnly) {
-    activeChips.push({ kind: "free", label: "Free only" });
+  if (filters.price !== "any") {
+    activeChips.push({
+      kind: "price",
+      label: filters.price === "free" ? "Free only" : `Under $${filters.price}`,
+    });
   }
 
   const clearChip = (kind: ChipKind) => {
     if (kind === "cat") applyFilters({ ...filters, filter: "All" as CategoryFilter });
-    else if (kind === "when") applyFilters({ ...filters, when: "any" as WhenFilter });
-    else applyFilters({ ...filters, freeOnly: false });
+    else if (kind === "when") {
+      applyFilters({ ...filters, when: "any" as WhenFilter, dateFrom: null, dateTo: null });
+    } else applyFilters({ ...filters, price: "any" });
   };
 
   return (

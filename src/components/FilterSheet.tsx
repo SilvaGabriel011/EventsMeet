@@ -2,7 +2,13 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import { useState } from "react";
-import { CATEGORIES, WHEN_OPTIONS, WhenFilter } from "@/lib/types";
+import {
+  CATEGORIES,
+  PRICE_OPTIONS,
+  PriceFilter,
+  WHEN_OPTIONS,
+  WhenFilter,
+} from "@/lib/types";
 import { Theme } from "@/lib/themes";
 
 export type CategoryFilter = "All" | (typeof CATEGORIES)[number];
@@ -10,7 +16,10 @@ export type CategoryFilter = "All" | (typeof CATEGORIES)[number];
 export interface FilterState {
   filter: CategoryFilter;
   when: WhenFilter;
-  freeOnly: boolean;
+  /** YYYY-MM-DD bounds, only meaningful when `when` is "custom". */
+  dateFrom: string | null;
+  dateTo: string | null;
+  price: PriceFilter;
 }
 
 interface FilterSheetProps {
@@ -24,6 +33,9 @@ interface FilterSheetProps {
 }
 
 export const favId = (category: string) => `cat:${category}`;
+
+/** Today's date in Perth (UTC+8, no DST) as YYYY-MM-DD. */
+const perthToday = () => new Date(Date.now() + 8 * 3600_000).toISOString().slice(0, 10);
 
 function Check() {
   return (
@@ -44,9 +56,19 @@ function SheetBody({
 }: Omit<FilterSheetProps, "open">) {
   const [draft, setDraft] = useState<FilterState>(current);
   const favSet = new Set(favorites);
+  const today = perthToday();
 
   const apply = () => {
-    onApply(draft);
+    const next = { ...draft };
+    if (next.when === "custom" && (!next.dateFrom || !next.dateTo)) {
+      // Half-filled range → no date filter.
+      next.when = "any";
+    }
+    if (next.when !== "custom") {
+      next.dateFrom = null;
+      next.dateTo = null;
+    }
+    onApply(next);
     onClose();
   };
 
@@ -62,6 +84,7 @@ function SheetBody({
     `flex w-full items-center rounded-xl text-sm font-semibold transition-colors ${
       selected ? t.pickerItemActive : t.pickerItem
     }`;
+  const dateInput = `flex-1 min-w-0 rounded-xl px-3 py-2.5 text-sm outline-none ${t.panelCard} ${t.panelTitle} [color-scheme:auto]`;
 
   return (
     <>
@@ -83,7 +106,13 @@ function SheetBody({
           <h2 className={`text-lg font-bold ${t.panelTitle}`}>Filters</h2>
           <button
             onClick={() =>
-              setDraft({ filter: "All", when: "any", freeOnly: false })
+              setDraft({
+                filter: "All",
+                when: "any",
+                dateFrom: null,
+                dateTo: null,
+                price: "any",
+              })
             }
             className={`text-xs font-semibold ${t.panelMuted} hover:opacity-80`}
           >
@@ -126,23 +155,72 @@ function SheetBody({
             {WHEN_OPTIONS.map((w) => (
               <div key={w.id} className={row(draft.when === w.id)}>
                 <button
-                  onClick={() => setDraft((d) => ({ ...d, when: w.id }))}
+                  onClick={() =>
+                    setDraft((d) => ({ ...d, when: w.id, dateFrom: null, dateTo: null }))
+                  }
                   className="flex flex-1 items-center justify-between px-3 py-2.5 text-left"
                 >
                   {w.label} {draft.when === w.id && <Check />}
                 </button>
               </div>
             ))}
+            <div className={row(draft.when === "custom")}>
+              <button
+                onClick={() => setDraft((d) => ({ ...d, when: "custom" }))}
+                className="flex flex-1 items-center justify-between px-3 py-2.5 text-left"
+              >
+                Pick dates… {draft.when === "custom" && <Check />}
+              </button>
+            </div>
+            {draft.when === "custom" && (
+              <div className="flex items-center gap-2 pt-1">
+                <input
+                  type="date"
+                  aria-label="From date"
+                  value={draft.dateFrom ?? ""}
+                  min={today}
+                  onChange={(e) => {
+                    const from = e.target.value || null;
+                    setDraft((d) => ({
+                      ...d,
+                      dateFrom: from,
+                      dateTo: from && (!d.dateTo || d.dateTo < from) ? from : d.dateTo,
+                    }));
+                  }}
+                  className={dateInput}
+                />
+                <span className={`shrink-0 text-sm ${t.panelMuted}`}>→</span>
+                <input
+                  type="date"
+                  aria-label="To date"
+                  value={draft.dateTo ?? ""}
+                  min={draft.dateFrom ?? today}
+                  onChange={(e) => {
+                    const to = e.target.value || null;
+                    setDraft((d) => ({
+                      ...d,
+                      dateTo: to,
+                      dateFrom: to && (!d.dateFrom || d.dateFrom > to) ? to : d.dateFrom,
+                    }));
+                  }}
+                  className={dateInput}
+                />
+              </div>
+            )}
           </div>
 
           <p className={sectionTitle}>Price</p>
-          <div className={row(draft.freeOnly)}>
-            <button
-              onClick={() => setDraft((d) => ({ ...d, freeOnly: !d.freeOnly }))}
-              className="flex flex-1 items-center justify-between px-3 py-2.5 text-left"
-            >
-              Free events only {draft.freeOnly && <Check />}
-            </button>
+          <div className="space-y-1.5">
+            {PRICE_OPTIONS.map((p) => (
+              <div key={String(p.id)} className={row(draft.price === p.id)}>
+                <button
+                  onClick={() => setDraft((d) => ({ ...d, price: p.id }))}
+                  className="flex flex-1 items-center justify-between px-3 py-2.5 text-left"
+                >
+                  {p.label} {draft.price === p.id && <Check />}
+                </button>
+              </div>
+            ))}
           </div>
         </div>
 

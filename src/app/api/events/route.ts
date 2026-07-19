@@ -5,6 +5,7 @@ import {
   PerthEvent,
   EventCategory,
   WhenFilter,
+  PriceFilter,
   TasteProfile,
 } from "@/lib/types";
 import { SAMPLE_EVENTS } from "@/lib/sample-events";
@@ -25,17 +26,28 @@ interface CacheEntry {
 // OpenAI for the same search within the TTL.
 const cache = new Map<string, CacheEntry>();
 
-const WHEN_PROMPTS: Record<WhenFilter, string> = {
+const WHEN_PROMPTS: Record<Exclude<WhenFilter, "custom">, string> = {
   any: "happening in the next 30 days",
   today: "happening TODAY only",
   weekend: "happening this coming weekend (Friday evening through Sunday)",
   week: "happening in the next 7 days",
 };
 
+function perthDate(isoDay: string): string {
+  return new Date(`${isoDay}T00:00:00+08:00`).toLocaleDateString("en-AU", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    timeZone: "Australia/Perth",
+  });
+}
+
 function buildPrompt(
   category: string | null,
   when: WhenFilter,
-  freeOnly: boolean,
+  dateFrom: string | null,
+  dateTo: string | null,
+  price: PriceFilter,
   taste: TasteProfile | null,
   exclude: string[]
 ): string {
@@ -52,7 +64,17 @@ function buildPrompt(
       ? `Focus on the "${category}" category.`
       : `Cover a diverse mix of categories.`;
 
-  const freeLine = freeOnly ? "ONLY include events that are free to attend." : "";
+  const whenText =
+    when === "custom" && dateFrom && dateTo
+      ? `happening between ${perthDate(dateFrom)} and ${perthDate(dateTo)} (inclusive)`
+      : WHEN_PROMPTS[when === "custom" ? "any" : when];
+
+  const freeLine =
+    price === "free"
+      ? "ONLY include events that are free to attend."
+      : typeof price === "number"
+        ? `Only include events that are free or cost at most $${price} AUD per ticket.`
+        : "";
 
   const tasteLine = taste
     ? `User taste profile from their swipe history — previously liked: ${taste.liked.join("; ")}.${
@@ -72,7 +94,7 @@ function buildPrompt(
 
   return `You are an event scout for Perth, Western Australia. Today is ${today} (Perth time).
 
-Search the web for REAL upcoming events in Perth and surrounding areas (Fremantle, Northbridge, Scarborough, Swan Valley, etc.) ${WHEN_PROMPTS[when]}. ${categoryLine} ${freeLine} ${tasteLine} ${excludeLine}
+Search the web for REAL upcoming events in Perth and surrounding areas (Fremantle, Northbridge, Scarborough, Swan Valley, etc.) ${whenText}. ${categoryLine} ${freeLine} ${tasteLine} ${excludeLine}
 
 Return ONLY a JSON array (no markdown, no commentary) of 8 to 12 events. Each element must have exactly these fields:
 - "title": event name
@@ -200,7 +222,9 @@ async function fetchLiveEvents(
   apiKey: string,
   category: string | null,
   when: WhenFilter,
-  freeOnly: boolean,
+  dateFrom: string | null,
+  dateTo: string | null,
+  price: PriceFilter,
   taste: TasteProfile | null,
   exclude: string[]
 ): Promise<PerthEvent[]> {
@@ -213,7 +237,7 @@ async function fetchLiveEvents(
     body: JSON.stringify({
       model: process.env.OPENAI_MODEL || DEFAULT_MODEL,
       tools: [{ type: "web_search" }],
-      input: buildPrompt(category, when, freeOnly, taste, exclude),
+      input: buildPrompt(category, when, dateFrom, dateTo, price, taste, exclude),
     }),
     signal: AbortSignal.timeout(45_000),
   });
@@ -231,8 +255,14 @@ async function fetchLiveEvents(
   return enrichWithImages(events);
 }
 
-/** Applies the when/free filters to the built-in sample events (Perth time). */
-function filterSamples(when: WhenFilter, freeOnly: boolean, category: string | null): PerthEvent[] {
+/** Applies the when/price filters to the built-in sample events (Perth time). */
+function filterSamples(
+  when: WhenFilter,
+  dateFrom: string | null,
+  dateTo: string | null,
+  price: PriceFilter,
+  category: string | null
+): PerthEvent[] {
   const now = Date.now();
   const perthDay = (ms: number) => Math.floor((ms + 8 * 3600_000) / 86_400_000);
   const withinDays = (startISO: string | null, days: number) => {
@@ -240,10 +270,19 @@ function filterSamples(when: WhenFilter, freeOnly: boolean, category: string | n
     const start = Date.parse(startISO);
     return start >= now - 3600_000 && perthDay(start) <= perthDay(now) + days;
   };
+  const isFree = (p: string) => p.toLowerCase().includes("free");
+  const priceNum = (p: string): number | null => {
+    const m = p.match(/(\d+(?:\.\d+)?)/);
+    return m ? parseFloat(m[1]) : null;
+  };
 
   return SAMPLE_EVENTS.filter((e) => {
     if (category && category !== "All" && e.category !== category) return false;
-    if (freeOnly && !e.price.toLowerCase().includes("free")) return false;
+    if (price === "free" && !isFree(e.price)) return false;
+    if (typeof price === "number") {
+      const n = priceNum(e.price);
+      if (!isFree(e.price) && (n === null || n > price)) return false;
+    }
     if (when === "today") return withinDays(e.start, 0);
     if (when === "weekend") {
       if (!withinDays(e.start, 7) || !e.start) return false;
@@ -251,6 +290,14 @@ function filterSamples(when: WhenFilter, freeOnly: boolean, category: string | n
       return dow === 5 || dow === 6 || dow === 0;
     }
     if (when === "week") return withinDays(e.start, 7);
+    if (when === "custom" && dateFrom && dateTo) {
+      if (!e.start) return false;
+      const start = Date.parse(e.start);
+      return (
+        start >= Date.parse(`${dateFrom}T00:00:00+08:00`) &&
+        start <= Date.parse(`${dateTo}T23:59:59+08:00`)
+      );
+    }
     return true;
   });
 }
@@ -270,10 +317,14 @@ function parseTaste(v: unknown): TasteProfile | null {
   return taste.liked.length || taste.skipped.length ? taste : null;
 }
 
+const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
+
 export async function POST(req: NextRequest) {
   let category: string | null = null;
   let when: WhenFilter = "any";
-  let freeOnly = false;
+  let dateFrom: string | null = null;
+  let dateTo: string | null = null;
+  let price: PriceFilter = "any";
   let taste: TasteProfile | null = null;
   let exclude: string[] = [];
   let refresh = false;
@@ -281,8 +332,13 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     if (typeof body.category === "string") category = body.category;
-    if (["any", "today", "weekend", "week"].includes(body.when)) when = body.when;
-    freeOnly = body.freeOnly === true;
+    if (["any", "today", "weekend", "week", "custom"].includes(body.when)) when = body.when;
+    if (typeof body.dateFrom === "string" && DAY_RE.test(body.dateFrom)) dateFrom = body.dateFrom;
+    if (typeof body.dateTo === "string" && DAY_RE.test(body.dateTo)) dateTo = body.dateTo;
+    if (body.price === "free") price = "free";
+    else if (typeof body.price === "number" && body.price > 0 && body.price <= 10_000) {
+      price = Math.round(body.price);
+    }
     taste = parseTaste(body.taste);
     if (Array.isArray(body.exclude)) {
       exclude = body.exclude.filter((x: unknown) => typeof x === "string");
@@ -292,9 +348,16 @@ export async function POST(req: NextRequest) {
     // Empty body is fine — defaults apply.
   }
 
+  // A custom range needs both valid, ordered dates.
+  if (when === "custom" && (!dateFrom || !dateTo || dateFrom > dateTo)) {
+    when = "any";
+    dateFrom = null;
+    dateTo = null;
+  }
+
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
-    const events = filterSamples(when, freeOnly, category);
+    const events = filterSamples(when, dateFrom, dateTo, price, category);
     return NextResponse.json<EventsResponse>({
       events,
       live: false,
@@ -310,7 +373,9 @@ export async function POST(req: NextRequest) {
   const cacheKey = [
     category ?? "All",
     when,
-    freeOnly,
+    dateFrom ?? "",
+    dateTo ?? "",
+    price,
     taste?.topCategories.slice().sort().join(",") ?? "",
   ].join("|");
   const cached = cache.get(cacheKey);
@@ -320,14 +385,23 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const events = await fetchLiveEvents(apiKey, category, when, freeOnly, taste, exclude);
+    const events = await fetchLiveEvents(
+      apiKey,
+      category,
+      when,
+      dateFrom,
+      dateTo,
+      price,
+      taste,
+      exclude
+    );
     if (exclude.length === 0) {
       cache.set(cacheKey, { events, ts: Date.now() });
     }
     return NextResponse.json<EventsResponse>({ events, live: true });
   } catch (err) {
     console.error("Live event search failed:", err);
-    const events = filterSamples(when, freeOnly, category);
+    const events = filterSamples(when, dateFrom, dateTo, price, category);
     return NextResponse.json<EventsResponse>({
       events,
       live: false,

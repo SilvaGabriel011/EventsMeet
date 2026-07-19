@@ -35,13 +35,25 @@ export interface PerthEvent {
   image: string | null;
 }
 
-export type WhenFilter = "any" | "today" | "weekend" | "week";
+export type WhenFilter = "any" | "today" | "weekend" | "week" | "custom";
 
-export const WHEN_OPTIONS: { id: WhenFilter; label: string }[] = [
+/** Preset options — "custom" is handled by the date-range picker. */
+export const WHEN_OPTIONS: { id: Exclude<WhenFilter, "custom">; label: string }[] = [
   { id: "any", label: "Any time" },
   { id: "today", label: "Today" },
   { id: "weekend", label: "Weekend" },
   { id: "week", label: "Next 7 days" },
+];
+
+/** "any", "free", or a maximum ticket price in dollars. */
+export type PriceFilter = "any" | "free" | number;
+
+export const PRICE_OPTIONS: { id: PriceFilter; label: string }[] = [
+  { id: "any", label: "Any price" },
+  { id: "free", label: "Free only" },
+  { id: 25, label: "Under $25" },
+  { id: 50, label: "Under $50" },
+  { id: 100, label: "Under $100" },
 ];
 
 /** Compact swipe-history summary sent to the AI to personalize the search. */
